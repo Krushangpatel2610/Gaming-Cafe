@@ -1,0 +1,6 @@
+{
+  "name": "GameCentral",
+  "description": "A comprehensive corporate modern management suite and analytics dashboard for gaming lounges, hardware tracking, reservations, and customer memberships.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
