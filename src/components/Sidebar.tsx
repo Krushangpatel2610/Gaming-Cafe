@@ -1,16 +1,17 @@
 import React from "react";
-import { 
-  LayoutDashboard, 
-  Monitor, 
-  Clock, 
-  Users, 
-  Gamepad2, 
-  Tag, 
-  Trophy, 
+import {
+  LayoutDashboard,
+  Monitor,
+  Clock,
+  Users,
+  Gamepad2,
+  Tag,
+  Trophy,
   Settings,
   Shield,
   LogOut
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 interface SidebarProps {
   activeTab: string;
@@ -19,6 +20,11 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab, loungeName }: SidebarProps) {
+  const { admin, logout } = useAuth();
+  const initials = admin?.name
+    ? admin.name.split(" ").map(part => part[0]).slice(0, 2).join("").toUpperCase()
+    : "SM";
+
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "live_pcs", label: "Live PCs", icon: Monitor },
@@ -80,15 +86,15 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
       <div className="p-4 border-t border-slate-200 bg-slate-50/50">
         <div className="flex items-center space-x-3 p-2 rounded-xl bg-white border border-slate-200 shadow-sm">
           <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-500 text-sm">
-            SM
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-slate-900 truncate">Staff Operator</p>
-            <p className="text-[10px] text-slate-400 font-mono truncate">ID: Staff_Michael</p>
+            <p className="text-xs font-bold text-slate-900 truncate">{admin?.name || "Staff Operator"}</p>
+            <p className="text-[10px] text-slate-400 font-mono truncate">{admin?.email || "Not signed in"}</p>
           </div>
-          <button 
-            title="Log out (system demo)"
-            onClick={() => alert("This is a mock admin environment log out. To restart, refresh the page.")}
+          <button
+            title="Log out"
+            onClick={logout}
             className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-slate-50 transition-colors"
           >
             <LogOut className="w-4 h-4" />
