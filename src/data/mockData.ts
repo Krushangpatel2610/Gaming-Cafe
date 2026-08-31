@@ -1,25 +1,23 @@
-import { 
-  PC, 
-  PCGroup, 
-  PCStatus, 
-  Customer, 
-  Game, 
-  Offer, 
-  LeaderboardEntry, 
-  SystemSettings, 
+import {
+  PC,
+  PCGroup,
+  PCStatus,
+  Game,
+  Offer,
+  LeaderboardEntry,
+  SystemSettings,
   Session,
   ActivityLog
 } from "../types";
 
+// loungeName is overwritten by the real Store name once it loads (see
+// App.tsx) — this is just the pre-load placeholder. The rest of these
+// fields have no backend equivalent and stay local-only.
 export const initialSettings: SystemSettings = {
   loungeName: "GameCentral Esports Lounge",
-  currency: "USD",
-  currencySymbol: "$",
+  currency: "INR",
+  currencySymbol: "₹",
   taxRate: 8.5,
-  standardRate: 4.50,
-  vipRate: 7.00,
-  consoleRate: 3.50,
-  streamingRate: 8.50,
   openingTime: "10:00",
   closingTime: "02:00",
   allowGuests: true,
@@ -268,100 +266,6 @@ export const initialPCs: PC[] = [
       monitor: "24\" BenQ ZOWIE FHD 144Hz TN"
     },
     totalPlayTimeToday: 90
-  }
-];
-
-export const initialCustomers: Customer[] = [
-  {
-    id: "cust-01",
-    name: "Alex Mercer",
-    email: "alex.mercer@gmail.com",
-    phone: "+1 (555) 342-9988",
-    membershipLevel: "Platinum",
-    balance: 75.50,
-    totalSpend: 1240.00,
-    totalPlayTime: 248,
-    registeredAt: "2025-01-15",
-    avatarUrl: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-02",
-    name: "Sarah Connor",
-    email: "sconnor@cyberdyne.net",
-    phone: "+1 (555) 911-2029",
-    membershipLevel: "Gold",
-    balance: 14.25,
-    totalSpend: 620.50,
-    totalPlayTime: 112,
-    registeredAt: "2025-02-10",
-    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-03",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+1 (555) 123-4567",
-    membershipLevel: "Bronze",
-    balance: 35.00,
-    totalSpend: 145.00,
-    totalPlayTime: 32,
-    registeredAt: "2026-03-01",
-    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-04",
-    name: "Elena Rostova",
-    email: "elena.rostova@yandex.ru",
-    phone: "+7 (999) 456-1122",
-    membershipLevel: "Platinum",
-    balance: 122.00,
-    totalSpend: 2150.00,
-    totalPlayTime: 410,
-    registeredAt: "2024-06-18",
-    avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-05",
-    name: "Marcus Aurelius",
-    email: "philosopher.king@rome.gov",
-    phone: "+1 (555) 444-1800",
-    membershipLevel: "Silver",
-    balance: 22.10,
-    totalSpend: 310.00,
-    totalPlayTime: 78,
-    registeredAt: "2025-11-23",
-    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-06",
-    name: "Lily Twitcher",
-    email: "lily_streams@twitch.tv",
-    phone: "+1 (555) 777-8899",
-    membershipLevel: "Gold",
-    balance: 45.00,
-    totalSpend: 890.00,
-    totalPlayTime: 195,
-    registeredAt: "2025-05-14",
-    avatarUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&auto=format&fit=crop&q=80",
-    status: "Active"
-  },
-  {
-    id: "cust-07",
-    name: "Gordon Freeman",
-    email: "gfreeman@blackmesa.org",
-    phone: "+1 (555) 333-4444",
-    membershipLevel: "Bronze",
-    balance: 0.00,
-    totalSpend: 55.00,
-    totalPlayTime: 12,
-    registeredAt: "2026-02-18",
-    avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80",
-    status: "Suspended"
   }
 ];
 

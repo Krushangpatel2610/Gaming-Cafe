@@ -30,6 +30,9 @@ export interface PC {
   currentUser?: string;
   timeRemaining?: number; // in seconds
   totalPlayTimeToday?: number; // in minutes
+  // Real backend link to this PC's System Type — hourly rate lives there
+  // (ApiSystemType.hourlyBaseRate), not on a fixed per-group settings value.
+  systemTypeId?: string;
 }
 
 export interface Session {
@@ -46,20 +49,6 @@ export interface Session {
   totalCost: number;
   status: "Active" | "Completed" | "Cancelled";
   paymentStatus: "Paid" | "Unpaid";
-}
-
-export interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  membershipLevel: "Bronze" | "Silver" | "Gold" | "Platinum";
-  balance: number;
-  totalSpend: number;
-  totalPlayTime: number; // in hours
-  registeredAt: string;
-  avatarUrl?: string;
-  status: "Active" | "Suspended";
 }
 
 export interface Game {
@@ -101,15 +90,18 @@ export interface LeaderboardEntry {
   date: string;
 }
 
+// Hourly rates used to live here as 4 fixed fields (standard/vip/console/
+// streaming) — that never matched the real backend, which has an arbitrary
+// number of named System Types, each with its own hourlyBaseRate. Rates are
+// now edited via the real System Types list (see SettingsView + ApiSystemType)
+// instead of here. The fields below have no backend equivalent at all
+// (no store-level tax rate, opening hours, or guest/autolock policy exists
+// server-side) — they stay local-only/cosmetic, same as before.
 export interface SystemSettings {
   loungeName: string;
   currency: string;
   currencySymbol: string;
   taxRate: number;
-  standardRate: number;
-  vipRate: number;
-  consoleRate: number;
-  streamingRate: number;
   openingTime: string;
   closingTime: string;
   allowGuests: boolean;

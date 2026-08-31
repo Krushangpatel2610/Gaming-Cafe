@@ -11,12 +11,13 @@ import {
   Gamepad2,
   Trash2
 } from "lucide-react";
-import { LeaderboardEntry, Customer, Game } from "../types";
+import { LeaderboardEntry } from "../types";
+import { ApiCustomer, ApiGame } from "../api/types";
 
 interface LeaderboardsViewProps {
   leaderboard: LeaderboardEntry[];
-  customers: Customer[];
-  games: Game[];
+  customers: ApiCustomer[];
+  games: ApiGame[];
   onSubmitScore: (entry: Omit<LeaderboardEntry, "id" | "rank" | "date">) => void;
 }
 
@@ -223,7 +224,7 @@ export default function LeaderboardsView({ leaderboard, customers, games, onSubm
                 >
                   <option value="">-- Choose Member --</option>
                   {customers.map(c => (
-                    <option key={c.id} value={c.name}>{c.name} ({c.membershipLevel})</option>
+                    <option key={c.userId} value={c.name || c.phone || c.userId}>{c.name || c.phone || c.userId.slice(0, 8)}</option>
                   ))}
                   <option value="Unregistered Guest">Guest Player</option>
                 </select>
@@ -240,7 +241,7 @@ export default function LeaderboardsView({ leaderboard, customers, games, onSubm
                 >
                   <option value="">-- Choose Game --</option>
                   {games.map(g => (
-                    <option key={g.id} value={g.title}>{g.title}</option>
+                    <option key={g.id} value={g.name}>{g.name}</option>
                   ))}
                 </select>
               </div>

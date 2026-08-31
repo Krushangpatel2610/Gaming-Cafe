@@ -1,38 +1,47 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { 
-  Monitor, 
-  Cpu, 
-  Play, 
-  Power, 
-  AlertTriangle, 
-  Clock, 
-  Search, 
+import {
+  Monitor,
+  Cpu,
+  Play,
+  Power,
+  AlertTriangle,
+  Clock,
+  Search,
   Filter,
   Users,
   Terminal,
   Zap,
   Info,
-  DollarSign
+  DollarSign,
+  Lock,
+  Unlock
 } from "lucide-react";
-import { PC, PCStatus, PCGroup, Customer, SystemSettings } from "../types";
+import { PC, PCStatus, PCGroup } from "../types";
+import { ApiCustomer, ApiSystemType } from "../api/types";
 
 interface LivePCsViewProps {
   pcs: PC[];
-  customers: Customer[];
-  settings: SystemSettings;
-  onUpdatePCStatus: (pcId: string, status: PCStatus, currentUser?: string, durationMinutes?: number) => void;
+  customers: ApiCustomer[];
+  systemTypes: ApiSystemType[];
+  getHourlyRateForPC: (pc: PC) => number;
+  onUpdatePCStatus: (pcId: string, status: PCStatus, currentUser?: string, durationMinutes?: number, customerId?: string) => void;
   onStopSession: (pcId: string) => void;
   onExtendSession: (pcId: string, additionalMinutes: number) => void;
+  onLockPC: (pcId: string) => void;
+  onUnlockPC: (pcId: string) => void;
 }
 
-export default function LivePCsView({ 
-  pcs, 
-  customers, 
-  settings, 
-  onUpdatePCStatus, 
-  onStopSession, 
-  onExtendSession 
+export default function LivePCsView({
+  pcs,
+  customers,
+  systemTypes,
+  getHourlyRateForPC,
+  onUpdatePCStatus,
+  onStopSession,
+  onExtendSession,
+  onLockPC,
+  onUnlockPC
 }: LivePCsViewProps) {
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
@@ -44,7 +53,7 @@ export default function LivePCsView({
   const [isGuest, setIsGuest] = useState<boolean>(true);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [customGuestName, setCustomGuestName] = useState<string>("Gamer Guest");
-  const [duration, setDuration] = useState<number>(60); // minutes
+  const [duration, setDuration] = useState<number>(60); // minutes, member path only — guests get a fixed 2hr walk-in block
 
   // Modal State for extending a session
   const [extendSessionPCId, setExtendSessionPCId] = useState<string | null>(null);
@@ -77,34 +86,17 @@ export default function LivePCsView({
     }
   };
 
-  const getHourlyRateForPC = (group: PCGroup) => {
-    switch (group) {
-      case PCGroup.VIP:
-        return settings.vipRate;
-      case PCGroup.STANDARD:
-        return settings.standardRate;
-      case PCGroup.CONSOLE:
-        return settings.consoleRate;
-      case PCGroup.STREAMING:
-        return settings.streamingRate;
-      default:
-        return settings.standardRate;
-    }
-  };
-
   const handleStartSessionSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!startSessionPCId) return;
 
-    let userName = "";
     if (isGuest) {
-      userName = customGuestName || "Guest Gamer";
+      onUpdatePCStatus(startSessionPCId, PCStatus.IN_USE, customGuestName || "Guest Gamer", undefined, undefined);
     } else {
-      const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-      userName = selectedCustomer ? selectedCustomer.name : "Guest Gamer";
+      const selectedCustomer = customers.find(c => c.userId === selectedCustomerId);
+      if (!selectedCustomer) return;
+      onUpdatePCStatus(startSessionPCId, PCStatus.IN_USE, selectedCustomer.name || "Member", duration, selectedCustomer.userId);
     }
-
-    onUpdatePCStatus(startSessionPCId, PCStatus.IN_USE, userName, duration);
     setStartSessionPCId(null);
     setSelectedCustomerId("");
     setCustomGuestName("Gamer Guest");
@@ -117,6 +109,11 @@ export default function LivePCsView({
     onExtendSession(extendSessionPCId, additionalMinutes);
     setExtendSessionPCId(null);
   };
+
+  const startPC = pcs.find(p => p.id === startSessionPCId);
+  const startRate = startPC ? getHourlyRateForPC(startPC) : 0;
+  const extendPC = pcs.find(p => p.id === extendSessionPCId);
+  const extendRate = extendPC ? getHourlyRateForPC(extendPC) : 0;
 
   return (
     <motion.div
@@ -193,7 +190,7 @@ export default function LivePCsView({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredPCs.map((pc) => {
           const isDetailActive = activePCDetailId === pc.id;
-          const rate = getHourlyRateForPC(pc.group);
+          const rate = getHourlyRateForPC(pc);
 
           const formatRemaining = (seconds?: number) => {
             if (seconds === undefined) return "Unlimited";
@@ -206,8 +203,8 @@ export default function LivePCsView({
             <div
               key={pc.id}
               className={`bg-white rounded-xl border transition-all duration-150 flex flex-col shadow-precision overflow-hidden ${
-                pc.status === PCStatus.IN_USE 
-                  ? "border-indigo-200 ring-2 ring-indigo-500/5" 
+                pc.status === PCStatus.IN_USE
+                  ? "border-indigo-200 ring-2 ring-indigo-500/5"
                   : pc.status === PCStatus.MAINTENANCE
                   ? "border-amber-200"
                   : "border-slate-200"
@@ -217,7 +214,7 @@ export default function LivePCsView({
               <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
                 <div className="min-w-0">
                   <div className="flex items-center space-x-2">
-                    <span className="text-xs font-mono font-bold text-slate-400">{pc.id.toUpperCase()}</span>
+                    <span className="text-xs font-mono font-bold text-slate-400">{pc.id.slice(0, 8).toUpperCase()}</span>
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
                     <span className="text-xs font-semibold text-slate-500 font-mono">{pc.group}</span>
                   </div>
@@ -245,17 +242,17 @@ export default function LivePCsView({
                         <Clock className="w-3 h-3 text-indigo-600" />
                         <span>{formatRemaining(pc.timeRemaining)}</span>
                       </div>
-                      <span className="font-bold">${rate.toFixed(2)}/hr</span>
+                      <span className="font-bold">₹{rate.toFixed(2)}/hr</span>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-1">
                     <p className="text-[10px] text-slate-400 font-mono uppercase">Idle Station</p>
                     <p className="text-xs font-semibold text-slate-600">
-                      {pc.status === PCStatus.AVAILABLE 
-                        ? `Ready for login • $${rate.toFixed(2)}/hr` 
-                        : pc.status === PCStatus.MAINTENANCE 
-                        ? "Currently in diagnostics" 
+                      {pc.status === PCStatus.AVAILABLE
+                        ? `Ready for login • ₹${rate.toFixed(2)}/hr`
+                        : pc.status === PCStatus.MAINTENANCE
+                        ? "Currently in diagnostics"
                         : "Powered off / Offline"}
                     </p>
                   </div>
@@ -296,84 +293,108 @@ export default function LivePCsView({
               </div>
 
               {/* PC Actions Footer */}
-              <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-2 text-xs">
-                <button
-                  onClick={() => setActivePCDetailId(isDetailActive ? null : pc.id)}
-                  className="p-1.5 hover:bg-slate-200/60 rounded text-slate-500 hover:text-slate-700 font-mono text-[11px]"
-                  title="Toggle hardware specs details"
-                >
-                  <Info className="w-4 h-4 inline mr-1" />
-                  Specs
-                </button>
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col gap-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setActivePCDetailId(isDetailActive ? null : pc.id)}
+                    className="p-1.5 hover:bg-slate-200/60 rounded text-slate-500 hover:text-slate-700 font-mono text-[11px]"
+                    title="Toggle hardware specs details"
+                  >
+                    <Info className="w-4 h-4 inline mr-1" />
+                    Specs
+                  </button>
 
-                <div className="flex items-center space-x-1.5">
-                  {pc.status === PCStatus.IN_USE ? (
-                    <>
-                      <button
-                        onClick={() => setExtendSessionPCId(pc.id)}
-                        className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-200/50"
-                        title="Extend current play session"
-                      >
-                        +Time
-                      </button>
-                      <button
-                        onClick={() => onStopSession(pc.id)}
-                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-[11px] font-bold border border-red-200/50"
-                        title="Force release/stop session"
-                      >
-                        Release
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Available controls */}
-                      <button
-                        onClick={() => {
-                          if (pc.status === PCStatus.AVAILABLE) {
-                            setStartSessionPCId(pc.id);
-                          } else {
-                            onUpdatePCStatus(pc.id, PCStatus.AVAILABLE);
-                          }
-                        }}
-                        disabled={pc.status === PCStatus.OFFLINE}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center space-x-1 border ${
-                          pc.status === PCStatus.AVAILABLE
-                            ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-sm"
-                            : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
-                        }`}
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>{pc.status === PCStatus.AVAILABLE ? "Start" : "Ready"}</span>
-                      </button>
+                  <div className="flex items-center space-x-1.5">
+                    {pc.status === PCStatus.IN_USE ? (
+                      <>
+                        <button
+                          onClick={() => setExtendSessionPCId(pc.id)}
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-200/50"
+                          title="Extend current play session"
+                        >
+                          +Time
+                        </button>
+                        <button
+                          onClick={() => onStopSession(pc.id)}
+                          className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-[11px] font-bold border border-red-200/50"
+                          title="Force release/stop session"
+                        >
+                          Release
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {/* Available controls */}
+                        <button
+                          onClick={() => {
+                            if (pc.status === PCStatus.AVAILABLE) {
+                              setStartSessionPCId(pc.id);
+                            } else {
+                              onUpdatePCStatus(pc.id, PCStatus.AVAILABLE);
+                            }
+                          }}
+                          disabled={pc.status === PCStatus.OFFLINE}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center space-x-1 border ${
+                            pc.status === PCStatus.AVAILABLE
+                              ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-sm"
+                              : "bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200"
+                          }`}
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>{pc.status === PCStatus.AVAILABLE ? "Start" : "Ready"}</span>
+                        </button>
 
-                      {/* Maintenance / Offline toggles */}
-                      <button
-                        onClick={() => {
-                          const nextStatus = pc.status === PCStatus.MAINTENANCE ? PCStatus.AVAILABLE : PCStatus.MAINTENANCE;
-                          onUpdatePCStatus(pc.id, nextStatus);
-                        }}
-                        className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-amber-600 rounded-lg"
-                        title="Toggle maintenance state"
-                      >
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                      </button>
+                        {/* Maintenance / Offline toggles */}
+                        <button
+                          onClick={() => {
+                            const nextStatus = pc.status === PCStatus.MAINTENANCE ? PCStatus.AVAILABLE : PCStatus.MAINTENANCE;
+                            onUpdatePCStatus(pc.id, nextStatus);
+                          }}
+                          className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-amber-600 rounded-lg"
+                          title="Toggle maintenance state"
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          const nextStatus = pc.status === PCStatus.OFFLINE ? PCStatus.AVAILABLE : PCStatus.OFFLINE;
-                          onUpdatePCStatus(pc.id, nextStatus);
-                        }}
-                        className={`p-1.5 border rounded-lg ${
-                          pc.status === PCStatus.OFFLINE
-                            ? "bg-slate-800 text-slate-400 border-slate-900 hover:bg-slate-700"
-                            : "bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
-                        }`}
-                        title={pc.status === PCStatus.OFFLINE ? "Turn station ON" : "Turn station OFF"}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  )}
+                        <button
+                          onClick={() => {
+                            const nextStatus = pc.status === PCStatus.OFFLINE ? PCStatus.AVAILABLE : PCStatus.OFFLINE;
+                            onUpdatePCStatus(pc.id, nextStatus);
+                          }}
+                          className={`p-1.5 border rounded-lg ${
+                            pc.status === PCStatus.OFFLINE
+                              ? "bg-slate-800 text-slate-400 border-slate-900 hover:bg-slate-700"
+                              : "bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
+                          }`}
+                          title={pc.status === PCStatus.OFFLINE ? "Turn station ON" : "Turn station OFF"}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Remote lock/unlock — independent of session state, pushed
+                    over the agent WebSocket to the physical PC Client */}
+                <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/70">
+                  <span className="text-[10px] text-slate-400 font-mono uppercase mr-auto">Remote:</span>
+                  <button
+                    onClick={() => onLockPC(pc.id)}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 rounded text-[10px] font-bold flex items-center space-x-1"
+                    title="Force-lock this PC regardless of session state"
+                  >
+                    <Lock className="w-3 h-3" />
+                    <span>Lock</span>
+                  </button>
+                  <button
+                    onClick={() => onUnlockPC(pc.id)}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 rounded text-[10px] font-bold flex items-center space-x-1"
+                    title="Force-unlock this PC regardless of session state"
+                  >
+                    <Unlock className="w-3 h-3" />
+                    <span>Unlock</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -391,9 +412,9 @@ export default function LivePCsView({
           >
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-900 font-display">Start Gaming Session</h3>
-              <p className="text-xs text-slate-400 mt-1">Configure user login credentials and rates for {startSessionPCId.toUpperCase()}</p>
+              <p className="text-xs text-slate-400 mt-1">Configure user login credentials and rates for {startPC?.name}</p>
             </div>
-            
+
             <form onSubmit={handleStartSessionSubmit} className="p-6 space-y-4">
               {/* User Type Choice */}
               <div className="space-y-1">
@@ -403,8 +424,8 @@ export default function LivePCsView({
                     type="button"
                     onClick={() => setIsGuest(true)}
                     className={`py-2 px-3 text-xs font-semibold rounded-lg border text-center transition-all ${
-                      isGuest 
-                        ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm" 
+                      isGuest
+                        ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm"
                         : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                     }`}
                   >
@@ -414,8 +435,8 @@ export default function LivePCsView({
                     type="button"
                     onClick={() => setIsGuest(false)}
                     className={`py-2 px-3 text-xs font-semibold rounded-lg border text-center transition-all ${
-                      !isGuest 
-                        ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm" 
+                      !isGuest
+                        ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm"
                         : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                     }`}
                   >
@@ -435,6 +456,7 @@ export default function LivePCsView({
                     required
                     className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50"
                   />
+                  <p className="text-[10px] text-slate-400 pt-1">Walk-in sessions are a standard 2-hour block (no reservation on file) — this goes through the real booking system, not just a bare session.</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -446,58 +468,60 @@ export default function LivePCsView({
                     className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50 appearance-none cursor-pointer"
                   >
                     <option value="">-- Select Member --</option>
-                    {customers.filter(c => c.status === "Active").map(cust => (
-                      <option key={cust.id} value={cust.id}>
-                        {cust.name} ({cust.membershipLevel} - Balance: ${cust.balance.toFixed(2)})
+                    {customers.filter(c => !c.isSuspended).map(cust => (
+                      <option key={cust.userId} value={cust.userId}>
+                        {cust.name || cust.phone || cust.userId.slice(0, 8)} (Balance: ₹{parseFloat(cust.creditsBalance).toFixed(2)})
                       </option>
                     ))}
                   </select>
                 </div>
               )}
 
-              {/* Duration configuration */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Duration Option</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[30, 60, 120, 240].map((mins) => (
-                    <button
-                      key={mins}
-                      type="button"
-                      onClick={() => setDuration(mins)}
-                      className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
-                        duration === mins 
-                          ? "bg-slate-900 border-slate-950 text-white shadow-sm" 
-                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      {mins >= 60 ? `${mins / 60} hr` : `${mins} min`}
-                    </button>
-                  ))}
+              {/* Duration configuration — member path only, walk-ins are a fixed 2hr block */}
+              {!isGuest && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Duration Option</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[30, 60, 120, 240].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => setDuration(mins)}
+                        className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
+                          duration === mins
+                            ? "bg-slate-900 border-slate-950 text-white shadow-sm"
+                            : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {mins >= 60 ? `${mins / 60} hr` : `${mins} min`}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pt-2">
+                    <input
+                      type="number"
+                      min="15"
+                      max="1440"
+                      value={duration}
+                      onChange={(e) => setDuration(parseInt(e.target.value) || 60)}
+                      className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none bg-slate-50"
+                      placeholder="Custom minutes (e.g. 180)"
+                    />
+                  </div>
                 </div>
-                <div className="pt-2">
-                  <input
-                    type="number"
-                    min="15"
-                    max="1440"
-                    value={duration}
-                    onChange={(e) => setDuration(parseInt(e.target.value) || 60)}
-                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none bg-slate-50"
-                    placeholder="Custom minutes (e.g. 180)"
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Cost Calculation block */}
               <div className="bg-indigo-50 p-3.5 rounded-lg border border-indigo-100 text-xs flex justify-between items-center">
                 <div className="space-y-0.5">
                   <span className="text-indigo-800 font-semibold block">Estimated session cost:</span>
                   <span className="text-[10px] text-indigo-600 font-mono">
-                    {duration} mins @ ${getHourlyRateForPC(pcs.find(p => p.id === startSessionPCId)?.group || PCGroup.STANDARD).toFixed(2)}/hr
+                    {isGuest ? 120 : duration} mins @ ₹{startRate.toFixed(2)}/hr
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-lg font-bold text-indigo-900 font-mono">
-                    ${((duration / 60) * getHourlyRateForPC(pcs.find(p => p.id === startSessionPCId)?.group || PCGroup.STANDARD)).toFixed(2)}
+                    ₹{(((isGuest ? 120 : duration) / 60) * startRate).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -533,9 +557,9 @@ export default function LivePCsView({
           >
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-base font-bold text-slate-900 font-display">Extend Gaming Session</h3>
-              <p className="text-xs text-slate-400 mt-1">Add additional gameplay credits to {extendSessionPCId.toUpperCase()}</p>
+              <p className="text-xs text-slate-400 mt-1">Add additional gameplay credits to {extendPC?.name}</p>
             </div>
-            
+
             <form onSubmit={handleExtendSessionSubmit} className="p-5 space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Additional Time Option</label>
@@ -546,8 +570,8 @@ export default function LivePCsView({
                       type="button"
                       onClick={() => setAdditionalMinutes(mins)}
                       className={`py-1.5 px-2 text-[11px] font-bold rounded-lg border text-center transition-all ${
-                        additionalMinutes === mins 
-                          ? "bg-indigo-600 border-indigo-700 text-white shadow-sm" 
+                        additionalMinutes === mins
+                          ? "bg-indigo-600 border-indigo-700 text-white shadow-sm"
                           : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       }`}
                     >
@@ -562,12 +586,12 @@ export default function LivePCsView({
                 <div className="space-y-0.5">
                   <span className="text-indigo-800 font-semibold block">Incremental charge:</span>
                   <span className="text-[10px] text-indigo-600 font-mono">
-                    +{additionalMinutes} mins @ ${getHourlyRateForPC(pcs.find(p => p.id === extendSessionPCId)?.group || PCGroup.STANDARD).toFixed(2)}/hr
+                    +{additionalMinutes} mins @ ₹{extendRate.toFixed(2)}/hr
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-base font-bold text-indigo-900 font-mono">
-                    ${((additionalMinutes / 60) * getHourlyRateForPC(pcs.find(p => p.id === extendSessionPCId)?.group || PCGroup.STANDARD)).toFixed(2)}
+                    ₹{((additionalMinutes / 60) * extendRate).toFixed(2)}
                   </span>
                 </div>
               </div>

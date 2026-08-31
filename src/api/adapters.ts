@@ -69,6 +69,7 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
     activeSessionId: activeSession?.id,
     currentUser: activeSession ? activeSession.walkInPhone || activeSession.userId || "Guest" : undefined,
     timeRemaining,
+    systemTypeId: system.systemTypeId,
   };
 }
 

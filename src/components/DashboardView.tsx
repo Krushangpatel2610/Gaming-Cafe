@@ -11,13 +11,14 @@ import {
   TrendingUp,
   Clock
 } from "lucide-react";
-import { PC, Customer, Session, Game, PCStatus } from "../types";
+import { PC, Session, PCStatus } from "../types";
+import { ApiCustomer, ApiGame } from "../api/types";
 
 interface DashboardViewProps {
   pcs: PC[];
-  customers: Customer[];
+  customers: ApiCustomer[];
   sessions: Session[];
-  games: Game[];
+  games: ApiGame[];
   setActiveTab: (tab: string) => void;
   onQuickStartSession: () => void;
   onQuickRegisterCustomer: () => void;
@@ -58,8 +59,9 @@ export default function DashboardView({
     return acc;
   }, {} as Record<string, number>);
 
-  // Sort games by play hours or launch count
-  const popularGames = [...games].sort((a, b) => b.launchCount - a.launchCount).slice(0, 4);
+  // No real launch-count data exists on the backend (that was invented in
+  // the old mock) — this just surfaces active catalog entries instead.
+  const activeCatalogGames = games.filter(g => g.isActive).slice(0, 4);
 
   return (
     <motion.div
@@ -109,7 +111,7 @@ export default function DashboardView({
           },
           {
             title: "Today's Gross Cash",
-            value: `$${totalSalesToday.toFixed(2)}`,
+            value: `₹${totalSalesToday.toFixed(2)}`,
             sub: "Active + completed sessions",
             icon: DollarSign,
             color: "text-emerald-600 bg-emerald-50 border-emerald-100",
@@ -265,16 +267,19 @@ export default function DashboardView({
                         const m = Math.floor((secs % 3600) / 60);
                         return `${h}h ${m}m remaining`;
                       };
+                      const activeSession = sessions.find(s => s.pcId === pc.id && s.status === "Active");
 
                       return (
                         <tr key={pc.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-3.5 font-bold font-mono text-indigo-600">{pc.name.split(" ")[0]}</td>
                           <td className="py-3.5 font-semibold text-slate-700">{pc.currentUser || "Guest User"}</td>
-                          <td className="py-3.5 text-slate-500 font-mono">Today, 10:30 AM</td>
+                          <td className="py-3.5 text-slate-500 font-mono">
+                            {activeSession ? new Date(activeSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
+                          </td>
                           <td className="py-3.5 font-semibold">
                             <span className={`inline-flex items-center space-x-1 text-[11px] px-2 py-0.5 rounded-full ${
-                              pc.timeRemaining && pc.timeRemaining < 900 
-                                ? "bg-red-50 text-red-700 border border-red-100 animate-pulse" 
+                              pc.timeRemaining && pc.timeRemaining < 900
+                                ? "bg-red-50 text-red-700 border border-red-100 animate-pulse"
                                 : "bg-indigo-50 text-indigo-700 border border-indigo-100/50"
                             }`}>
                               <Clock className="w-3 h-3" />
@@ -282,7 +287,7 @@ export default function DashboardView({
                             </span>
                           </td>
                           <td className="py-3.5 text-right font-bold text-slate-900 font-mono">
-                            $13.50
+                            ₹{(activeSession?.totalCost ?? 0).toFixed(2)}
                           </td>
                         </tr>
                       );
@@ -326,11 +331,11 @@ export default function DashboardView({
             </div>
           </div>
 
-          {/* Popular Games Widget */}
+          {/* Active Games Widget */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="text-sm font-bold text-slate-800 font-display">Launch Leaderboard</h4>
-              <button 
+              <h4 className="text-sm font-bold text-slate-800 font-display">Active Game Catalog</h4>
+              <button
                 onClick={() => setActiveTab("games")}
                 className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
               >
@@ -338,27 +343,21 @@ export default function DashboardView({
               </button>
             </div>
             <div className="space-y-4">
-              {popularGames.map((game, i) => (
-                <div key={game.id} className="flex items-center space-x-3.5">
-                  <span className="text-xs font-bold text-slate-400 font-mono w-4">#{i+1}</span>
-                  <img 
-                    src={game.imageUrl} 
-                    alt={game.title} 
-                    className="w-10 h-10 rounded-lg object-cover bg-slate-100 border border-slate-100 shadow-sm shrink-0"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-800 truncate">{game.title}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{game.genre}</p>
+              {activeCatalogGames.length === 0 ? (
+                <p className="text-xs text-slate-400">No active games in the catalog yet.</p>
+              ) : (
+                activeCatalogGames.map((game) => (
+                  <div key={game.id} className="flex items-center space-x-3.5">
+                    <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                      <Gamepad2 className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">{game.name}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{game.genre || "Uncategorized"}</p>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-slate-700 font-mono bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/50">
-                      <TrendingUp className="w-3 h-3 text-emerald-500" />
-                      <span>{game.launchCount}</span>
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 

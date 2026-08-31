@@ -1,24 +1,23 @@
 import React, { useState } from "react";
 import { motion } from "motion/react";
-import { 
-  Clock, 
-  Play, 
-  History, 
-  Calculator, 
-  DollarSign, 
-  Plus, 
+import {
+  Clock,
+  Play,
+  History,
+  Calculator,
+  DollarSign,
+  Plus,
   CheckCircle,
-  FileText,
-  Percent,
-  Search,
-  Check
+  Search
 } from "lucide-react";
-import { Session, PC, PCStatus, Customer, SystemSettings, PCGroup } from "../types";
+import { Session, PC, SystemSettings } from "../types";
+import { ApiCustomer, ApiSystemType } from "../api/types";
 
 interface SessionsViewProps {
   sessions: Session[];
   pcs: PC[];
-  customers: Customer[];
+  customers: ApiCustomer[];
+  systemTypes: ApiSystemType[];
   settings: SystemSettings;
   onStopSession: (pcId: string) => void;
   onStartManualSession: (pcId: string, customerName: string, durationMinutes: number) => void;
@@ -27,17 +26,15 @@ interface SessionsViewProps {
 export default function SessionsView({
   sessions,
   pcs,
-  customers,
+  systemTypes,
   settings,
-  onStopSession,
-  onStartManualSession
+  onStopSession
 }: SessionsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"active" | "history" | "calculator">("active");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Calculator state
-  const [calcZone, setCalcZone] = useState<PCGroup>(PCGroup.STANDARD);
-  const [calcTier, setCalcTier] = useState<string>("None");
+  // Calculator state — real system type instead of the old fake PCGroup zone
+  const [calcTypeId, setCalcTypeId] = useState<string>(systemTypes[0]?.id || "");
   const [calcHours, setCalcHours] = useState<number>(3);
   const [calcTax, setCalcTax] = useState<boolean>(true);
 
@@ -45,44 +42,22 @@ export default function SessionsView({
   const activeSessions = sessions.filter(s => s.status === "Active");
   const completedSessions = sessions.filter(s => s.status === "Completed" || s.status === "Cancelled");
 
-  const filteredActive = activeSessions.filter(s => 
+  const filteredActive = activeSessions.filter(s =>
     s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.pcName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredHistory = completedSessions.filter(s => 
+  const filteredHistory = completedSessions.filter(s =>
     s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.pcName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Helper pricing calculation
-  const getZoneRate = (zone: PCGroup) => {
-    switch (zone) {
-      case PCGroup.VIP: return settings.vipRate;
-      case PCGroup.STANDARD: return settings.standardRate;
-      case PCGroup.CONSOLE: return settings.consoleRate;
-      case PCGroup.STREAMING: return settings.streamingRate;
-    }
-  };
-
-  const getTierDiscount = (tier: string) => {
-    switch (tier) {
-      case "Silver": return 0.05; // 5%
-      case "Gold": return 0.10; // 10%
-      case "Platinum": return 0.15; // 15%
-      default: return 0.00;
-    }
-  };
-
-  // Calculator computations
-  const hourlyRate = getZoneRate(calcZone);
+  const activeCalcType = systemTypes.find(t => t.id === calcTypeId) || systemTypes[0];
+  const hourlyRate = activeCalcType ? parseFloat(activeCalcType.hourlyBaseRate) : 0;
   const rawSubtotal = hourlyRate * calcHours;
-  const discountRate = getTierDiscount(calcTier);
-  const discountAmount = rawSubtotal * discountRate;
-  const subtotalAfterDiscount = rawSubtotal - discountAmount;
   const taxRate = calcTax ? settings.taxRate / 100 : 0;
-  const taxAmount = subtotalAfterDiscount * taxRate;
-  const finalTotal = subtotalAfterDiscount + taxAmount;
+  const taxAmount = rawSubtotal * taxRate;
+  const finalTotal = rawSubtotal + taxAmount;
 
   return (
     <motion.div
@@ -94,12 +69,12 @@ export default function SessionsView({
       {/* Tab Header bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-precision">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-display font-display">Sessions & Billing</h2>
+          <h2 className="text-xl font-bold text-slate-900 font-display">Sessions & Billing</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Track currently active logins, access completion receipts, and calculate bulk booking discount rates.
+            Track currently active logins, access completion receipts, and calculate booking estimates using real hourly rates.
           </p>
         </div>
-        
+
         {/* Sub-tab toggles */}
         <div className="flex p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs self-start sm:self-auto">
           <button
@@ -195,16 +170,16 @@ export default function SessionsView({
                         <td className="p-4 font-bold font-mono text-indigo-600">{sess.pcName}</td>
                         <td className="p-4">
                           <div className="font-semibold text-slate-800">{sess.customerName}</div>
-                          {sess.customerId && <div className="text-[10px] text-slate-400 font-mono">{sess.customerId}</div>}
+                          {sess.customerId && <div className="text-[10px] text-slate-400 font-mono">{sess.customerId.slice(0, 8)}</div>}
                         </td>
-                        <td className="p-4 font-mono text-slate-600">${sess.ratePerHour.toFixed(2)}/hr</td>
+                        <td className="p-4 font-mono text-slate-600">₹{sess.ratePerHour.toFixed(2)}/hr</td>
                         <td className="p-4 text-slate-500 font-mono">
                           {new Date(sess.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </td>
                         <td className="p-4">
                           <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                            isUrgent 
-                              ? "bg-red-50 text-red-700 border-red-100 animate-pulse" 
+                            isUrgent
+                              ? "bg-red-50 text-red-700 border-red-100 animate-pulse"
                               : "bg-indigo-50 text-indigo-700 border-indigo-100"
                           }`}>
                             <Clock className="w-3 h-3" />
@@ -212,7 +187,7 @@ export default function SessionsView({
                           </span>
                         </td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">
-                          ${sess.totalCost.toFixed(2)}
+                          ₹{sess.totalCost.toFixed(2)}
                         </td>
                         <td className="p-4 text-center">
                           <button
@@ -236,8 +211,8 @@ export default function SessionsView({
       {activeSubTab === "history" && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-precision overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-            <h3 className="text-sm font-bold text-slate-800">Completed Sessions Archive</h3>
-            <p className="text-xs text-slate-400">Auditable logs of logged-out clients, final invoices, and payment statuses.</p>
+            <h3 className="text-sm font-bold text-slate-800">Recent Sessions</h3>
+            <p className="text-xs text-slate-400">Most recent 100 sessions of any status — completed, cancelled, or disputed.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
@@ -268,21 +243,25 @@ export default function SessionsView({
 
                     return (
                       <tr key={sess.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4 font-mono text-[11px] text-slate-500">{sess.id}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-500">{sess.id.slice(0, 8)}</td>
                         <td className="p-4 font-bold text-slate-800">{sess.pcName}</td>
                         <td className="p-4">
                           <div className="font-semibold text-slate-800">{sess.customerName}</div>
                           <div className="text-[10px] text-slate-400 font-mono">Started: {formatDate(sess.startTime)}</div>
                         </td>
                         <td className="p-4 text-slate-600 font-mono">{sess.durationMinutes} minutes</td>
-                        <td className="p-4 font-mono text-slate-500">${sess.ratePerHour.toFixed(2)}/hr</td>
+                        <td className="p-4 font-mono text-slate-500">₹{sess.ratePerHour.toFixed(2)}/hr</td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">
-                          ${sess.totalCost.toFixed(2)}
+                          ₹{sess.totalCost.toFixed(2)}
                         </td>
                         <td className="p-4 text-center">
-                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle className="w-3 h-3 text-emerald-600" />
-                            <span>Paid</span>
+                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            sess.paymentStatus === "Paid"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}>
+                            <CheckCircle className="w-3 h-3" />
+                            <span>{sess.paymentStatus}</span>
                           </span>
                         </td>
                       </tr>
@@ -298,41 +277,26 @@ export default function SessionsView({
       {/* Tab: PRICING CALCULATOR */}
       {activeSubTab === "calculator" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
+
           {/* Controls Box */}
           <div className="md:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-5">
-            <h3 className="text-base font-bold text-slate-800 font-display">Simulated Booking Parameters</h3>
-            <p className="text-xs text-slate-400">Adjust the configurations to produce an estimated receipt for group reserves or custom promotions.</p>
+            <h3 className="text-base font-bold text-slate-800 font-display">Booking Estimate</h3>
+            <p className="text-xs text-slate-400">Uses the real hourly rate for the selected System Type (see Settings) — no membership-tier discount exists in the backend, so this is rate × hours + tax only.</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              
-              {/* Select PC Group */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Lounge PC Zone</label>
-                <select
-                  value={calcZone}
-                  onChange={(e) => setCalcZone(e.target.value as PCGroup)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50 cursor-pointer"
-                >
-                  <option value={PCGroup.VIP}>VIP Zone (${settings.vipRate.toFixed(2)}/hr)</option>
-                  <option value={PCGroup.STANDARD}>Standard Zone (${settings.standardRate.toFixed(2)}/hr)</option>
-                  <option value={PCGroup.CONSOLE}>Console Lounge (${settings.consoleRate.toFixed(2)}/hr)</option>
-                  <option value={PCGroup.STREAMING}>Streaming Booth (${settings.streamingRate.toFixed(2)}/hr)</option>
-                </select>
-              </div>
 
-              {/* Select Membership Tier */}
+              {/* Select System Type */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Member Loyalty Level</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System Type</label>
                 <select
-                  value={calcTier}
-                  onChange={(e) => setCalcTier(e.target.value)}
+                  value={calcTypeId}
+                  onChange={(e) => setCalcTypeId(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all bg-slate-50 cursor-pointer"
                 >
-                  <option value="None">Guest / Non-member (0% Discount)</option>
-                  <option value="Silver">Silver Level (5% Discount)</option>
-                  <option value="Gold">Gold Level (10% Discount)</option>
-                  <option value="Platinum">Platinum Level (15% Discount)</option>
+                  {systemTypes.length === 0 && <option value="">No system types configured</option>}
+                  {systemTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name} (₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr)</option>
+                  ))}
                 </select>
               </div>
 
@@ -370,62 +334,39 @@ export default function SessionsView({
 
           {/* Receipt Output Box */}
           <div className="bg-slate-900 text-slate-100 p-6 rounded-xl border border-slate-800 shadow-xl flex flex-col justify-between relative overflow-hidden">
-            {/* Decors */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl pointer-events-none" />
 
             <div className="space-y-4">
               <div className="flex items-center space-x-2 text-xs font-mono text-indigo-400 font-bold uppercase tracking-widest border-b border-slate-800 pb-3">
-                <Plus className="w-4 h-4 animate-spin" />
+                <Plus className="w-4 h-4" />
                 <span>Estimated Receipt</span>
               </div>
 
-              {/* Breakdown detail rows */}
               <div className="space-y-3 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Base Hourly Rate:</span>
-                  <span className="text-slate-200">${hourlyRate.toFixed(2)}/hr</span>
+                  <span className="text-slate-200">₹{hourlyRate.toFixed(2)}/hr</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Total Hours booked:</span>
                   <span className="text-slate-200">{calcHours} hrs</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Base Subtotal:</span>
-                  <span className="text-slate-200">${rawSubtotal.toFixed(2)}</span>
-                </div>
-
-                {discountRate > 0 && (
-                  <div className="flex justify-between text-emerald-400">
-                    <span>{calcTier} discount ({discountRate * 100}%):</span>
-                    <span>-${discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-
                 <div className="flex justify-between border-t border-slate-800 pt-2.5">
-                  <span className="text-slate-400">Taxed Subtotal:</span>
-                  <span className="text-slate-200">${subtotalAfterDiscount.toFixed(2)}</span>
+                  <span className="text-slate-400">Subtotal:</span>
+                  <span className="text-slate-200">₹{rawSubtotal.toFixed(2)}</span>
                 </div>
-
                 <div className="flex justify-between">
                   <span className="text-slate-400">Local Tax ({calcTax ? `${settings.taxRate}%` : "0%"}):</span>
-                  <span className="text-slate-200">${taxAmount.toFixed(2)}</span>
+                  <span className="text-slate-200">₹{taxAmount.toFixed(2)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Total Block */}
             <div className="mt-8 pt-4 border-t border-dashed border-slate-800 space-y-4">
               <div className="flex justify-between items-baseline">
                 <span className="text-xs font-bold text-slate-400 font-mono uppercase">Grand Total Due:</span>
-                <span className="text-3xl font-bold font-mono text-white tracking-tight">${finalTotal.toFixed(2)}</span>
+                <span className="text-3xl font-bold font-mono text-white tracking-tight">₹{finalTotal.toFixed(2)}</span>
               </div>
-              <button 
-                onClick={() => alert(`Calculator Estimate: Total is $${finalTotal.toFixed(2)}. Apply this during Quick Session checkout!`)}
-                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold font-sans transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-indigo-500/20"
-              >
-                <DollarSign className="w-4 h-4" />
-                <span>Confirm Quote</span>
-              </button>
             </div>
           </div>
 

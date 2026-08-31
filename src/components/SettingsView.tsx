@@ -1,55 +1,64 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { 
-  Settings, 
-  Save, 
-  DollarSign, 
-  Shield, 
-  ToggleLeft, 
-  ToggleRight, 
-  Clock, 
+import {
+  Save,
+  DollarSign,
+  Shield,
+  Clock,
   Building,
   CheckCircle2
 } from "lucide-react";
 import { SystemSettings } from "../types";
+import { ApiSystemType } from "../api/types";
 
 interface SettingsViewProps {
   settings: SystemSettings;
-  onSaveSettings: (settings: SystemSettings) => void;
+  systemTypes: ApiSystemType[];
+  onSaveSettings: (settings: SystemSettings, rateChanges: { systemTypeId: string; hourlyBaseRate: number }[]) => void;
 }
 
-export default function SettingsView({ settings, onSaveSettings }: SettingsViewProps) {
+export default function SettingsView({ settings, systemTypes, onSaveSettings }: SettingsViewProps) {
   const [loungeName, setLoungeName] = useState<string>(settings.loungeName);
-  const [currency, setCurrency] = useState<string>(settings.currency);
   const [currencySymbol, setCurrencySymbol] = useState<string>(settings.currencySymbol);
   const [taxRate, setTaxRate] = useState<number>(settings.taxRate);
-  const [standardRate, setStandardRate] = useState<number>(settings.standardRate);
-  const [vipRate, setVIPRate] = useState<number>(settings.vipRate);
-  const [consoleRate, setConsoleRate] = useState<number>(settings.consoleRate);
-  const [streamingRate, setStreamingRate] = useState<number>(settings.streamingRate);
   const [openingTime, setOpeningTime] = useState<string>(settings.openingTime);
   const [closingTime, setClosingTime] = useState<string>(settings.closingTime);
   const [allowGuests, setAllowGuests] = useState<boolean>(settings.allowGuests);
   const [autoLockScreen, setAutoLockScreen] = useState<boolean>(settings.autoLockScreen);
 
+  // Real per-System-Type hourly rates — replaces the old 4 fixed fields.
+  const [rates, setRates] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setLoungeName(settings.loungeName);
+  }, [settings.loungeName]);
+
+  useEffect(() => {
+    setRates(Object.fromEntries(systemTypes.map(t => [t.id, parseFloat(t.hourlyBaseRate)])));
+  }, [systemTypes]);
+
   const [showSavedNotification, setShowSavedNotification] = useState<boolean>(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveSettings({
-      loungeName,
-      currency,
-      currencySymbol,
-      taxRate,
-      standardRate,
-      vipRate,
-      consoleRate,
-      streamingRate,
-      openingTime,
-      closingTime,
-      allowGuests,
-      autoLockScreen
-    });
+
+    const rateChanges = systemTypes
+      .filter(t => rates[t.id] !== undefined && rates[t.id] !== parseFloat(t.hourlyBaseRate))
+      .map(t => ({ systemTypeId: t.id, hourlyBaseRate: rates[t.id] }));
+
+    onSaveSettings(
+      {
+        loungeName,
+        currency: settings.currency,
+        currencySymbol,
+        taxRate,
+        openingTime,
+        closingTime,
+        allowGuests,
+        autoLockScreen
+      },
+      rateChanges
+    );
 
     setShowSavedNotification(true);
     setTimeout(() => setShowSavedNotification(false), 3000);
@@ -67,7 +76,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
         <div>
           <h2 className="text-xl font-bold text-slate-900 font-display">System Settings & Configurations</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Configure hourly rates, taxes, open hours, and automatic locking policies.
+            Lounge name and hourly rates are real and save to the backend. Tax/hours/toggles below have no backend equivalent yet and stay local to this browser.
           </p>
         </div>
 
@@ -80,7 +89,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
+
         {/* Left column: General & Hours */}
         <div className="md:col-span-2 space-y-6">
           {/* General settings card */}
@@ -92,7 +101,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Lounge Brand Name</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Lounge / Store Name</label>
                 <input
                   type="text"
                   required
@@ -100,6 +109,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
                   onChange={(e) => setLoungeName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-sans transition-all"
                 />
+                <p className="text-[10px] text-slate-400">Real — saves to the store record.</p>
               </div>
 
               <div className="space-y-1">
@@ -119,7 +129,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4">
             <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
               <Clock className="w-4.5 h-4.5 text-indigo-600" />
-              <span>Operating Hours Configuration</span>
+              <span>Operating Hours (local only)</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -151,7 +161,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-5">
             <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
               <Shield className="w-4.5 h-4.5 text-indigo-600" />
-              <span>Security & Access Mandates</span>
+              <span>Security & Access (local only)</span>
             </div>
 
             <div className="space-y-4">
@@ -196,61 +206,34 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
           </div>
         </div>
 
-        {/* Right column: Tariff Rate values */}
+        {/* Right column: Real hourly rates per System Type */}
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4">
             <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
               <DollarSign className="w-4.5 h-4.5 text-indigo-600" />
-              <span>Hourly Tariffs & Taxes</span>
+              <span>Hourly Rates by System Type</span>
             </div>
 
             <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Standard PC Rate ($ / Hour)</label>
-                <input
-                  type="number"
-                  step="0.10"
-                  value={standardRate}
-                  onChange={(e) => setStandardRate(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">VIP PC Rate ($ / Hour)</label>
-                <input
-                  type="number"
-                  step="0.10"
-                  value={vipRate}
-                  onChange={(e) => setVIPRate(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Console Deck Rate ($ / Hour)</label>
-                <input
-                  type="number"
-                  step="0.10"
-                  value={consoleRate}
-                  onChange={(e) => setConsoleRate(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Streaming Booth Rate ($ / Hour)</label>
-                <input
-                  type="number"
-                  step="0.10"
-                  value={streamingRate}
-                  onChange={(e) => setStreamingRate(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
-                />
-              </div>
+              {systemTypes.length === 0 ? (
+                <p className="text-xs text-slate-400">No system types configured for this store yet.</p>
+              ) : (
+                systemTypes.map(type => (
+                  <div key={type.id} className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">{type.name} (₹ / Hour)</label>
+                    <input
+                      type="number"
+                      step="0.10"
+                      value={rates[type.id] ?? 0}
+                      onChange={(e) => setRates(prev => ({ ...prev, [type.id]: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
+                    />
+                  </div>
+                ))
+              )}
 
               <div className="space-y-1 border-t border-slate-100 pt-3">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Local Tax Rate (%)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Local Tax Rate (%) — local only</label>
                 <input
                   type="number"
                   step="0.1"
@@ -266,7 +249,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-indigo-500/10"
             >
               <Save className="w-4 h-4" />
-              <span>Save System Config</span>
+              <span>Save Settings</span>
             </button>
           </div>
         </div>

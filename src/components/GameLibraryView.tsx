@@ -1,78 +1,49 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
-import { 
-  Gamepad2, 
-  Plus, 
-  Search, 
-  Filter, 
-  HardDrive, 
-  Play, 
-  RefreshCw, 
-  Trash2,
-  TrendingUp,
-  DownloadCloud,
+import {
+  Gamepad2,
+  Plus,
+  Search,
+  Filter,
+  RefreshCw,
   CheckCircle,
-  AlertTriangle
+  XCircle
 } from "lucide-react";
-import { Game } from "../types";
+import { ApiGame } from "../api/types";
 
 interface GameLibraryViewProps {
-  games: Game[];
-  onAddGame: (game: Omit<Game, "id" | "launchCount" | "playTimeHours">) => void;
-  onLaunchGame: (gameId: string) => void;
-  onUpdateGameStatus: (gameId: string, status: "Ready" | "Updating" | "Offline") => void;
+  games: ApiGame[];
+  onAddGame: (name: string, genre?: string) => void;
+  onUpdateGameStatus: (gameId: string, isActive: boolean) => void;
 }
 
-export default function GameLibraryView({ 
-  games, 
-  onAddGame, 
-  onLaunchGame, 
-  onUpdateGameStatus 
+export default function GameLibraryView({
+  games,
+  onAddGame,
+  onUpdateGameStatus
 }: GameLibraryViewProps) {
   const [selectedGenre, setSelectedGenre] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("All");
   const [textSearch, setTextSearch] = useState<string>("");
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 
   // Form states for Add Game
-  const [newTitle, setNewTitle] = useState<string>("");
+  const [newName, setNewName] = useState<string>("");
   const [newGenre, setNewGenre] = useState<string>("");
-  const [newDev, setNewDev] = useState<string>("");
-  const [newSize, setNewSize] = useState<number>(50);
-  const [newImage, setNewImage] = useState<string>("");
 
-  // Extracted genres list
-  const genres = ["All", ...Array.from(new Set(games.map(g => g.genre.split(", ")[0])))];
+  const genres = ["All", ...Array.from(new Set(games.map(g => g.genre).filter(Boolean) as string[]))];
 
   const filteredGames = games.filter(g => {
-    const matchesGenre = selectedGenre === "All" || g.genre.includes(selectedGenre);
-    const matchesText = g.title.toLowerCase().includes(textSearch.toLowerCase()) ||
-                        g.developer.toLowerCase().includes(textSearch.toLowerCase());
+    const matchesGenre = selectedGenre === "All" || g.genre === selectedGenre;
+    const matchesText = g.name.toLowerCase().includes(textSearch.toLowerCase());
     return matchesGenre && matchesText;
   });
 
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Pick standard thumbnail if none provided
-    const fallbackImage = newImage || "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=300&auto=format&fit=crop&q=80";
-
-    onAddGame({
-      title: newTitle,
-      genre: newGenre,
-      developer: newDev,
-      sizeGB: newSize,
-      imageUrl: fallbackImage,
-      status: "Ready"
-    });
-
-    // Reset
+    onAddGame(newName, newGenre || undefined);
     setShowAddModal(false);
-    setNewTitle("");
+    setNewName("");
     setNewGenre("");
-    setNewDev("");
-    setNewSize(50);
-    setNewImage("");
   };
 
   return (
@@ -85,9 +56,9 @@ export default function GameLibraryView({
       {/* Top Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-precision">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 font-display">Shared Game Library Profile</h2>
+          <h2 className="text-xl font-bold text-slate-900 font-display">Game Catalog Registry</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Pre-installed games catalogue, storage monitoring, auto-update tasks, and launch counts.
+            The master game list every station's install list is built from. Installing a specific game onto a specific PC happens per-station, not here.
           </p>
         </div>
         <button
@@ -95,7 +66,7 @@ export default function GameLibraryView({
           className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-blue-500/10 transition-all flex items-center space-x-1.5 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
-          <span>Add New Game</span>
+          <span>Add Game to Registry</span>
         </button>
       </div>
 
@@ -106,7 +77,7 @@ export default function GameLibraryView({
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search game titles, publishers, developers..."
+            placeholder="Search game titles..."
             value={textSearch}
             onChange={(e) => setTextSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
@@ -130,118 +101,54 @@ export default function GameLibraryView({
 
       {/* Grid of Game Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {filteredGames.map((game) => {
-          
-          const getStatusText = (status: string) => {
-            switch (status) {
-              case "Ready":
-                return "text-emerald-700 bg-emerald-50 border-emerald-200";
-              case "Updating":
-                return "text-blue-700 bg-blue-50 border-blue-200 animate-pulse";
-              case "Offline":
-                return "text-red-700 bg-red-50 border-red-200";
-              default:
-                return "text-slate-500 bg-slate-50 border-slate-200";
-            }
-          };
-
-          return (
+        {filteredGames.length === 0 ? (
+          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-sm">
+            No games in the registry yet — add one to get started.
+          </div>
+        ) : (
+          filteredGames.map((game) => (
             <div
               key={game.id}
-              className="bg-white rounded-xl border border-slate-200 shadow-precision overflow-hidden flex flex-col justify-between hover:border-slate-300 transition-all group"
+              className={`bg-white rounded-xl border shadow-precision overflow-hidden flex flex-col justify-between hover:border-slate-300 transition-all ${
+                game.isActive ? "border-slate-200" : "border-slate-200 opacity-60"
+              }`}
             >
-              {/* Card Banner Image */}
-              <div className="relative aspect-video bg-slate-900 overflow-hidden">
-                <img 
-                  src={game.imageUrl} 
-                  alt={game.title} 
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
-                
-                {/* Size badge */}
-                <div className="absolute top-2.5 right-2.5 bg-slate-950/80 backdrop-blur-md px-2 py-1 rounded text-[10px] font-mono font-bold text-slate-300 flex items-center space-x-1">
-                  <HardDrive className="w-3 h-3 text-slate-400" />
-                  <span>{game.sizeGB} GB</span>
-                </div>
-
-                {/* Status Overlay */}
-                <div className="absolute bottom-2.5 left-2.5 flex items-center space-x-1.5">
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border shadow-sm ${getStatusText(game.status)}`}>
-                    {game.status} {game.status === "Updating" && `(${game.updateProgress}%)`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Game Contents */}
               <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{game.title}</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">{game.developer}</p>
-                </div>
-
-                {/* Simulated engagement stats */}
-                <div className="grid grid-cols-2 gap-2 text-[11px] font-mono py-2.5 border-t border-b border-slate-100">
-                  <div className="space-y-0.5">
-                    <span className="text-slate-400 block">Launch Count:</span>
-                    <span className="text-slate-700 font-bold">{game.launchCount} plays</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{game.name}</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">{game.genre || "Uncategorized"}</p>
                   </div>
-                  <div className="space-y-0.5">
-                    <span className="text-slate-400 block">Avg Time Today:</span>
-                    <span className="text-slate-700 font-bold">{game.playTimeHours} hrs</span>
+                  <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                    <Gamepad2 className="w-4.5 h-4.5 text-blue-500" />
                   </div>
                 </div>
 
-                {/* Update Progression Bar (only if updating) */}
-                {game.status === "Updating" && (
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] text-blue-700 font-bold font-mono">
-                      <span>Downloading Assets...</span>
-                      <span>{game.updateProgress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-blue-600 h-full rounded-full transition-all duration-300" style={{ width: `${game.updateProgress}%` }} />
-                    </div>
-                  </div>
-                )}
+                <span className={`self-start px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                  game.isActive
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                    : "text-red-700 bg-red-50 border-red-200"
+                }`}>
+                  {game.isActive ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                  {game.isActive ? "Active in registry" : "Taken offline"}
+                </span>
 
                 {/* Action footer */}
-                <div className="flex items-center gap-2 pt-1 text-xs">
-                  <button
-                    disabled={game.status !== "Ready"}
-                    onClick={() => onLaunchGame(game.id)}
-                    className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150 border border-blue-600 text-white rounded-lg font-bold transition-all flex items-center justify-center space-x-1 shadow-sm"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Launch</span>
-                  </button>
-
-                  {game.status === "Offline" ? (
-                    <button
-                      onClick={() => onUpdateGameStatus(game.id, "Updating")}
-                      className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 rounded-lg"
-                      title="Run client update check"
-                    >
-                      <DownloadCloud className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const nextStatus = game.status === "Ready" ? "Offline" : "Ready";
-                        onUpdateGameStatus(game.id, nextStatus);
-                      }}
-                      className="p-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-500 rounded-lg"
-                      title={game.status === "Ready" ? "Take game offline" : "Restore online status"}
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={() => onUpdateGameStatus(game.id, !game.isActive)}
+                  className={`w-full py-1.5 rounded-lg font-bold transition-all flex items-center justify-center space-x-1 text-xs border ${
+                    game.isActive
+                      ? "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600"
+                      : "bg-blue-600 hover:bg-blue-500 border-blue-600 text-white"
+                  }`}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{game.isActive ? "Take Offline" : "Restore to Registry"}</span>
+                </button>
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </div>
 
       {/* MODAL: Add Game */}
@@ -253,71 +160,32 @@ export default function GameLibraryView({
             className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden"
           >
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-lg font-bold text-slate-900 font-display">Install Game in Lounge Directory</h3>
-              <p className="text-xs text-slate-400 mt-1">Add game details and set standard disk space usage bounds.</p>
+              <h3 className="text-lg font-bold text-slate-900 font-display">Add Game to Registry</h3>
+              <p className="text-xs text-slate-400 mt-1">Adds to the master catalog — install it onto specific stations separately.</p>
             </div>
-            
+
             <form onSubmit={handleAddGameSubmit} className="p-6 space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Game Title</label>
                 <input
                   type="text"
                   required
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
                   placeholder="e.g. Elden Ring"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Genre / Classification</label>
-                  <input
-                    type="text"
-                    required
-                    value={newGenre}
-                    onChange={(e) => setNewGenre(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
-                    placeholder="e.g. Action RPG"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Publisher / Developer</label>
-                  <input
-                    type="text"
-                    required
-                    value={newDev}
-                    onChange={(e) => setNewDev(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
-                    placeholder="e.g. FromSoftware"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">File Size (GB)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="500"
-                    required
-                    value={newSize}
-                    onChange={(e) => setNewSize(parseInt(e.target.value) || 50)}
-                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none bg-slate-50"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono font-display">Thumbnail Image URL</label>
-                  <input
-                    type="url"
-                    value={newImage}
-                    onChange={(e) => setNewImage(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none bg-slate-50"
-                    placeholder="Optional Unsplash direct link"
-                  />
-                </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Genre (optional)</label>
+                <input
+                  type="text"
+                  value={newGenre}
+                  onChange={(e) => setNewGenre(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  placeholder="e.g. Action RPG"
+                />
               </div>
 
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
@@ -332,7 +200,7 @@ export default function GameLibraryView({
                   type="submit"
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-blue-500/10"
                 >
-                  Confirm Installation
+                  Add to Registry
                 </button>
               </div>
             </form>

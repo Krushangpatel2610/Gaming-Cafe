@@ -88,3 +88,96 @@ export interface ApiBooking {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface ApiStore {
+  id: string;
+  name: string;
+  slug: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  timezone?: string;
+  currency?: string;
+}
+
+// Real customers have no membership-tier or avatar concept — those were
+// invented in the old mock data with nothing behind them. This is the
+// actual shape from GET /stores/:storeId/customers (see customers/model.ts
+// on the backend).
+export interface ApiCustomer {
+  userId: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  isVerified: boolean;
+  isSuspended: boolean;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+  creditsBalance: string;
+  totalSpend: string;
+  totalSessions: number;
+  totalPlayMinutes: number;
+  lastVisitAt: string | null;
+  joinedAt: string;
+}
+
+export interface ApiGame {
+  id: string;
+  name: string;
+  genre?: string | null;
+  executablePath?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type ApiCampaignType =
+  | "percentage_off"
+  | "fixed_off"
+  | "bonus_minutes"
+  | "bonus_credits"
+  | "happy_hour"
+  | "first_visit";
+export type ApiCampaignStatus = "draft" | "scheduled" | "active" | "paused" | "expired" | "cancelled";
+
+export interface ApiCampaign {
+  id: string;
+  storeId: string;
+  name: string;
+  campaignType: ApiCampaignType;
+  value: string;
+  validFrom: string;
+  validUntil: string;
+  minTier: number;
+  maxRedemptions?: number | null;
+  currentRedemptions: number;
+  maxPerUser?: number | null;
+  status: ApiCampaignStatus;
+  description?: string | null;
+  terms?: string | null;
+  // Only present on the single-campaign detail response (GET /:id), not the list.
+  redemptionsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ApiSystemTypeSpecs {
+  gpu?: string;
+  cpu?: string;
+  ram?: string;
+  storage?: string;
+  monitor?: string;
+  peripherals?: string;
+  extras?: string;
+}
+
+export interface ApiSystemType {
+  id: string;
+  storeId: string;
+  name: string;
+  description?: string | null;
+  hourlyBaseRate: string;
+  specs?: ApiSystemTypeSpecs;
+  sortOrder?: number;
+  isActive: boolean;
+}
