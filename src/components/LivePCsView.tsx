@@ -15,10 +15,18 @@ import {
   Info,
   DollarSign,
   Lock,
-  Unlock
+  Unlock,
+  Plus,
+  X,
+  ChevronDown,
+  Trash2,
+  KeyRound,
+  Copy
 } from "lucide-react";
 import { PC, PCStatus, PCGroup } from "../types";
-import { ApiCustomer, ApiSystemType } from "../api/types";
+import { ApiCustomer, ApiSystemType, ApiSystemPlatform } from "../api/types";
+import { useAuth } from "../context/AuthContext";
+import { CreateSystemBody } from "../api/systems";
 
 interface LivePCsViewProps {
   pcs: PC[];
@@ -30,7 +38,12 @@ interface LivePCsViewProps {
   onExtendSession: (pcId: string, additionalMinutes: number) => void;
   onLockPC: (pcId: string) => void;
   onUnlockPC: (pcId: string) => void;
+  onAddSystem: (body: CreateSystemBody) => Promise<string | null>;
+  onDeleteSystem: (pcId: string) => void;
+  onRegenerateKey: (pcId: string) => Promise<string | null>;
 }
+
+const PLATFORMS: ApiSystemPlatform[] = ["pc", "ps5", "ps4", "xbox", "vr", "other"];
 
 export default function LivePCsView({
   pcs,
@@ -41,12 +54,32 @@ export default function LivePCsView({
   onStopSession,
   onExtendSession,
   onLockPC,
-  onUnlockPC
+  onUnlockPC,
+  onAddSystem,
+  onDeleteSystem,
+  onRegenerateKey
 }: LivePCsViewProps) {
+  const { admin } = useAuth();
+  const canManageHardware = admin?.role === "super_admin" || admin?.role === "admin";
   const [selectedGroup, setSelectedGroup] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activePCDetailId, setActivePCDetailId] = useState<string | null>(null);
+
+  // Add Terminal modal state
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [newName, setNewName] = useState<string>("");
+  const [newStationNumber, setNewStationNumber] = useState<number>(1);
+  const [newPlatform, setNewPlatform] = useState<ApiSystemPlatform>("pc");
+  const [newSystemTypeId, setNewSystemTypeId] = useState<string>("");
+  const [newIp, setNewIp] = useState<string>("");
+  const [newMac, setNewMac] = useState<string>("");
+  const [newCpu, setNewCpu] = useState<string>("");
+  const [newGpu, setNewGpu] = useState<string>("");
+  const [newRam, setNewRam] = useState<string>("");
+  const [newMonitor, setNewMonitor] = useState<string>("");
+  const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
 
   // Modal State for starting a session
   const [startSessionPCId, setStartSessionPCId] = useState<string | null>(null);
@@ -115,6 +148,53 @@ export default function LivePCsView({
   const extendPC = pcs.find(p => p.id === extendSessionPCId);
   const extendRate = extendPC ? getHourlyRateForPC(extendPC) : 0;
 
+  const resetAddForm = () => {
+    setNewName("");
+    setNewStationNumber(pcs.length + 1);
+    setNewPlatform("pc");
+    setNewSystemTypeId("");
+    setNewIp("");
+    setNewMac("");
+    setNewCpu("");
+    setNewGpu("");
+    setNewRam("");
+    setNewMonitor("");
+    setShowAdvanced(false);
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const specs: Record<string, string> = {};
+    if (newCpu) specs.cpu = newCpu;
+    if (newGpu) specs.gpu = newGpu;
+    if (newRam) specs.ram = newRam;
+    if (newMonitor) specs.monitor = newMonitor;
+
+    const apiKey = await onAddSystem({
+      name: newName,
+      stationNumber: newStationNumber,
+      platform: newPlatform,
+      systemTypeId: newSystemTypeId || undefined,
+      ipAddress: newIp || undefined,
+      macAddress: newMac || undefined,
+      specs: Object.keys(specs).length > 0 ? specs : undefined
+    });
+    setShowAddModal(false);
+    resetAddForm();
+    if (apiKey) setRevealedApiKey(apiKey);
+  };
+
+  const handleRegenerateClick = async (pcId: string, pcName: string) => {
+    if (!window.confirm(`Regenerate the API key for ${pcName}? The old key will stop working immediately — update the agent config right after.`)) return;
+    const apiKey = await onRegenerateKey(pcId);
+    if (apiKey) setRevealedApiKey(apiKey);
+  };
+
+  const handleDeleteClick = (pcId: string, pcName: string) => {
+    if (!window.confirm(`Deactivate ${pcName}? It will no longer appear as a bookable terminal.`)) return;
+    onDeleteSystem(pcId);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -146,6 +226,15 @@ export default function LivePCsView({
               </button>
             ))}
           </div>
+          {canManageHardware && (
+            <button
+              onClick={() => { resetAddForm(); setShowAddModal(true); }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 flex items-center space-x-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Terminal</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -395,6 +484,24 @@ export default function LivePCsView({
                     <Unlock className="w-3 h-3" />
                     <span>Unlock</span>
                   </button>
+                  {canManageHardware && (
+                    <>
+                      <button
+                        onClick={() => handleRegenerateClick(pc.id, pc.name)}
+                        className="px-2 py-1 bg-white hover:bg-amber-50 border border-slate-200 text-slate-500 hover:text-amber-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                        title="Regenerate this terminal's API key"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(pc.id, pc.name)}
+                        className="px-2 py-1 bg-white hover:bg-red-50 border border-slate-200 text-slate-500 hover:text-red-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                        title="Deactivate this terminal"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -612,6 +719,161 @@ export default function LivePCsView({
                 </button>
               </div>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Add Terminal — streamlined, name/platform/type up front, hardware details tucked behind Advanced */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden max-h-[90vh] overflow-y-auto"
+          >
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between sticky top-0">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 font-display">Add New Terminal</h3>
+                <p className="text-xs text-slate-400 mt-1">Registers a new gaming station and issues its API key.</p>
+              </div>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Terminal Name</label>
+                <input
+                  required
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder="e.g. Station 07"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Station Number</label>
+                  <input
+                    required
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={newStationNumber}
+                    onChange={(e) => setNewStationNumber(parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Platform</label>
+                  <select
+                    value={newPlatform}
+                    onChange={(e) => setNewPlatform(e.target.value as ApiSystemPlatform)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none appearance-none cursor-pointer uppercase"
+                  >
+                    {PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System Type (sets hourly rate)</label>
+                <select
+                  value={newSystemTypeId}
+                  onChange={(e) => setNewSystemTypeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="">-- None (no rate assigned yet) --</option>
+                  {systemTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} — ₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-semibold text-slate-600"
+              >
+                <span>Advanced (network, hardware specs)</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+              </button>
+
+              {showAdvanced && (
+                <div className="space-y-3 border border-slate-100 rounded-lg p-3 bg-slate-50/50">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">IP Address</label>
+                      <input value={newIp} onChange={(e) => setNewIp(e.target.value)} placeholder="192.168.1.20" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none font-mono" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">MAC Address</label>
+                      <input value={newMac} onChange={(e) => setNewMac(e.target.value)} placeholder="AA:BB:CC:00:11:22" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none font-mono" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">CPU</label>
+                      <input value={newCpu} onChange={(e) => setNewCpu(e.target.value)} placeholder="Ryzen 7 5800X" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">GPU</label>
+                      <input value={newGpu} onChange={(e) => setNewGpu(e.target.value)} placeholder="RTX 4070" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">RAM</label>
+                      <input value={newRam} onChange={(e) => setNewRam(e.target.value)} placeholder="32GB DDR5" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Monitor</label>
+                      <input value={newMonitor} onChange={(e) => setNewMonitor(e.target.value)} placeholder="27&quot; 165Hz" className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex space-x-3 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10">
+                  Register Terminal
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Reveal API key — shown exactly once, on create or regenerate */}
+      {revealedApiKey && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-amber-50">
+              <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2"><KeyRound className="w-4 h-4 text-amber-600" />Terminal API Key</h3>
+              <p className="text-xs text-amber-700 mt-1">Save this now — it will not be shown again. Configure it in the PC Client agent.</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex items-center gap-2 bg-slate-900 text-emerald-400 font-mono text-xs rounded-lg p-3 break-all">
+                <span className="flex-1">{revealedApiKey}</span>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(revealedApiKey)}
+                  className="text-slate-400 hover:text-white shrink-0"
+                  title="Copy to clipboard"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                onClick={() => setRevealedApiKey(null)}
+                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
+              >
+                Done — I've saved it
+              </button>
+            </div>
           </motion.div>
         </div>
       )}

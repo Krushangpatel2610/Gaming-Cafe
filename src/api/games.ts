@@ -33,3 +33,7 @@ export function installGame(storeId: string, systemId: string, gameId: string): 
 export function uninstallGame(storeId: string, systemId: string, gameId: string): Promise<unknown> {
   return apiDelete(`/stores/${storeId}/games/uninstall?systemId=${systemId}&gameId=${gameId}`);
 }
+
+export function getGameSystems(storeId: string, gameId: string): Promise<string[]> {
+  return apiGet<string[]>(`/stores/${storeId}/games/${gameId}/systems`);
+}

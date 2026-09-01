@@ -40,3 +40,24 @@ export function suspendCustomer(storeId: string, userId: string, reason?: string
 export function activateCustomer(storeId: string, userId: string): Promise<ApiCustomer> {
   return apiPost<ApiCustomer>(`/stores/${storeId}/customers/${userId}/activate`);
 }
+
+// Self-service — called by a signed-up user (not an admin) to join a
+// store's customer directory, e.g. right after picking their gaming zone
+// during signup. Requires the user's own token to already be set.
+export function joinStoreAsCustomer(storeId: string): Promise<ApiCustomer> {
+  return apiPost<ApiCustomer>(`/stores/${storeId}/customers/join`);
+}
+
+// Public — the whole "I'm a customer" signup path in one call: creates the
+// login and links it to the chosen store's customer directory. No token
+// needed before or after; this app has no customer session to hold.
+export interface CustomerSignupBody {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}
+
+export function signupAsCustomer(storeId: string, body: CustomerSignupBody): Promise<ApiCustomer> {
+  return apiPost<ApiCustomer>(`/stores/${storeId}/customers/signup`, body);
+}

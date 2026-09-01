@@ -8,8 +8,14 @@ import {
   Tag,
   Trophy,
   Settings,
-  Shield,
-  LogOut
+  LogOut,
+  CalendarDays,
+  Receipt,
+  QrCode,
+  BarChart3,
+  ShieldQuestion,
+  Bell,
+  UserCog
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -29,10 +35,23 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "live_pcs", label: "Live PCs", icon: Monitor },
     { id: "sessions", label: "Sessions", icon: Clock },
+    { id: "bookings", label: "Bookings", icon: CalendarDays },
     { id: "customers", label: "Customers", icon: Users },
     { id: "games", label: "Game Library", icon: Gamepad2 },
     { id: "offers", label: "Offers & Promos", icon: Tag },
     { id: "leaderboard", label: "Leaderboard", icon: Trophy },
+  ];
+
+  const financeItems = [
+    { id: "billing", label: "Billing", icon: Receipt },
+    { id: "payments", label: "Payments", icon: QrCode },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    { id: "disputes", label: "Disputes", icon: ShieldQuestion },
+  ];
+
+  const adminItems = [
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "team", label: "Team & Access", icon: UserCog },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
@@ -57,6 +76,62 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
           Management
         </p>
         {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              id={`sidebar-tab-${item.id}`}
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-150 group text-left ${
+                isActive
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium"
+              }`}
+            >
+              <Icon className={`w-4.5 h-4.5 transition-transform duration-150 ${
+                isActive ? "scale-105 text-indigo-600" : "text-slate-400 group-hover:text-slate-600"
+              }`} />
+              <span className="truncate">{item.label}</span>
+              {isActive && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600" />
+              )}
+            </button>
+          );
+        })}
+
+        <p className="px-3 mb-2.5 mt-5 text-[10px] font-bold tracking-wider text-slate-400 uppercase font-mono">
+          Finance & Ops
+        </p>
+        {financeItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              id={`sidebar-tab-${item.id}`}
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl text-sm transition-all duration-150 group text-left ${
+                isActive
+                  ? "bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100/50"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium"
+              }`}
+            >
+              <Icon className={`w-4.5 h-4.5 transition-transform duration-150 ${
+                isActive ? "scale-105 text-indigo-600" : "text-slate-400 group-hover:text-slate-600"
+              }`} />
+              <span className="truncate">{item.label}</span>
+              {isActive && (
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600" />
+              )}
+            </button>
+          );
+        })}
+
+        <p className="px-3 mb-2.5 mt-5 text-[10px] font-bold tracking-wider text-slate-400 uppercase font-mono">
+          Admin
+        </p>
+        {adminItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           return (

@@ -1,36 +1,74 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { adminLogin, adminLogout, getAdminMe } from "../api/auth";
+import { userLoginEmail } from "../api/auth";
+import { getUserProfile } from "../api/user";
 import { getStoredToken, setStoredToken, setUnauthorizedHandler, ApiError } from "../api/client";
-import { ApiAdmin } from "../api/types";
+import { ApiAdmin, ApiAdminLoginResponse, ApiUser } from "../api/types";
 
-const REFRESH_TOKEN_KEY = "gc_admin_refresh_token";
+const ADMIN_REFRESH_KEY = "gc_admin_refresh_token";
+const USER_REFRESH_KEY = "gc_user_refresh_token";
+const USER_STORE_KEY = "gc_user_store_id";
+const SESSION_TYPE_KEY = "gc_session_type";
 
 interface AuthContextValue {
+  // Admin session
   admin: ApiAdmin | null;
   storeId: string | null;
+  // User session
+  user: ApiUser | null;
+  userStoreId: string | null;
+
   isLoading: boolean;
   error: string | null;
+
+  // Admin auth
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  applySession: (result: ApiAdminLoginResponse) => void;
+
+  // User auth
+  userLogin: (email: string, password: string, storeId: string) => Promise<void>;
+  userLogout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [admin, setAdmin] = useState<ApiAdmin | null>(null);
+  const [user, setUser] = useState<ApiUser | null>(null);
+  const [userStoreId, setUserStoreIdState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const clearSession = useCallback(() => {
+  const clearAdminSession = useCallback(() => {
     setStoredToken(null);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(ADMIN_REFRESH_KEY);
+    localStorage.removeItem(SESSION_TYPE_KEY);
     setAdmin(null);
   }, []);
 
+  const clearUserSession = useCallback(() => {
+    setStoredToken(null);
+    localStorage.removeItem(USER_REFRESH_KEY);
+    localStorage.removeItem(USER_STORE_KEY);
+    localStorage.removeItem(SESSION_TYPE_KEY);
+    setUser(null);
+    setUserStoreIdState(null);
+  }, []);
+
+  const clearActiveSession = useCallback(() => {
+    const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
+    if (sessionType === "user") {
+      clearUserSession();
+    } else {
+      clearAdminSession();
+    }
+  }, [clearAdminSession, clearUserSession]);
+
   useEffect(() => {
-    setUnauthorizedHandler(clearSession);
+    setUnauthorizedHandler(clearActiveSession);
     return () => setUnauthorizedHandler(null);
-  }, [clearSession]);
+  }, [clearActiveSession]);
 
   useEffect(() => {
     const token = getStoredToken();
@@ -38,37 +76,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return;
     }
-    getAdminMe()
-      .then(setAdmin)
-      .catch(() => clearSession())
-      .finally(() => setIsLoading(false));
-  }, [clearSession]);
+
+    const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
+
+    if (sessionType === "user") {
+      const storedStoreId = localStorage.getItem(USER_STORE_KEY);
+      getUserProfile()
+        .then((u) => {
+          setUser(u);
+          setUserStoreIdState(storedStoreId);
+        })
+        .catch(() => clearUserSession())
+        .finally(() => setIsLoading(false));
+    } else {
+      getAdminMe()
+        .then(setAdmin)
+        .catch(() => clearAdminSession())
+        .finally(() => setIsLoading(false));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applySession = useCallback((result: ApiAdminLoginResponse) => {
+    clearUserSession();
+    setStoredToken(result.accessToken);
+    localStorage.setItem(ADMIN_REFRESH_KEY, result.refreshToken);
+    localStorage.setItem(SESSION_TYPE_KEY, "admin");
+    setAdmin(result.admin);
+    setUser(null);
+  }, [clearUserSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     setError(null);
     try {
       const result = await adminLogin(email, password);
-      setStoredToken(result.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
-      setAdmin(result.admin);
+      applySession(result);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Unable to sign in.";
       setError(message);
       throw err;
     }
-  }, []);
+  }, [applySession]);
 
   const logout = useCallback(() => {
-    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY) || undefined;
-    adminLogout(refreshToken).catch(() => {
-      // Best-effort: even if the server call fails, clear the local session.
-    });
-    clearSession();
-  }, [clearSession]);
+    const refreshToken = localStorage.getItem(ADMIN_REFRESH_KEY) || undefined;
+    adminLogout(refreshToken).catch(() => {});
+    clearAdminSession();
+  }, [clearAdminSession]);
+
+  const userLogin = useCallback(async (email: string, password: string, storeId: string) => {
+    setError(null);
+    try {
+      const result = await userLoginEmail(email, password);
+      clearAdminSession();
+      setStoredToken(result.accessToken);
+      localStorage.setItem(USER_REFRESH_KEY, result.refreshToken);
+      localStorage.setItem(USER_STORE_KEY, storeId);
+      localStorage.setItem(SESSION_TYPE_KEY, "user");
+      setUser(result.user);
+      setUserStoreIdState(storeId);
+      setAdmin(null);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Unable to sign in.";
+      setError(message);
+      throw err;
+    }
+  }, [clearAdminSession]);
+
+  const userLogout = useCallback(() => {
+    clearUserSession();
+  }, [clearUserSession]);
 
   return (
     <AuthContext.Provider
-      value={{ admin, storeId: admin?.storeId ?? null, isLoading, error, login, logout }}
+      value={{
+        admin,
+        storeId: admin?.storeId ?? null,
+        user,
+        userStoreId,
+        isLoading,
+        error,
+        login,
+        logout,
+        applySession,
+        userLogin,
+        userLogout,
+      }}
     >
       {children}
     </AuthContext.Provider>

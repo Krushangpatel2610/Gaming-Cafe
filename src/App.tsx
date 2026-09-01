@@ -10,18 +10,27 @@ import OffersView from "./components/OffersView";
 import LeaderboardsView from "./components/LeaderboardsView";
 import SettingsView from "./components/SettingsView";
 import LoginView from "./components/LoginView";
+import SignupView from "./components/SignupView";
+import UserDashboardView from "./components/UserDashboardView";
+import BookingsView from "./components/BookingsView";
+import BillingView from "./components/BillingView";
+import PaymentsView from "./components/PaymentsView";
+import AnalyticsView from "./components/AnalyticsView";
+import DisputesView from "./components/DisputesView";
+import NotificationsView from "./components/NotificationsView";
+import TeamView from "./components/TeamView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
-import { listLiveSystems, updateSystem, lockSystem, unlockSystem } from "./api/systems";
+import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody } from "./api/systems";
 import { listActiveSessions, listSessions, startManualSession, endSession, extendSession } from "./api/sessions";
 import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
 import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } from "./api/customers";
 import { adjustCredits } from "./api/credits";
-import { listGames, createGame, updateGame } from "./api/games";
+import { listGames, createGame, updateGame, installGame, uninstallGame } from "./api/games";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
 import { listSystemTypes, updateSystemTypeRate } from "./api/systemTypes";
-import { updateStore } from "./api/stores";
+import { updateStore, getStoreProfile } from "./api/stores";
 import { ApiCustomer, ApiGame, ApiCampaign, ApiSystemType } from "./api/types";
 
 import {
@@ -49,7 +58,8 @@ export default function App() {
 }
 
 function AuthGate() {
-  const { admin, isLoading } = useAuth();
+  const { admin, user, userStoreId, isLoading } = useAuth();
+  const [authView, setAuthView] = useState<"login" | "signup">("login");
 
   if (isLoading) {
     return (
@@ -59,8 +69,16 @@ function AuthGate() {
     );
   }
 
+  if (user && userStoreId) {
+    return <UserDashboardView />;
+  }
+
   if (!admin) {
-    return <LoginView />;
+    return authView === "login" ? (
+      <LoginView onSwitchToSignup={() => setAuthView("signup")} />
+    ) : (
+      <SignupView onSwitchToLogin={() => setAuthView("login")} />
+    );
   }
 
   return <Dashboard />;
@@ -219,12 +237,28 @@ function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  // Real store name/currency — previously the sidebar/header always showed
+  // the mock default until someone manually saved Settings once. Fetches
+  // the actual store profile on load so branding matches what was entered
+  // at signup (or set on the store) from the very first render.
+  const refreshStoreProfile = useCallback(async () => {
+    if (!storeId) return;
+    try {
+      const store = await getStoreProfile(storeId);
+      setSettings(prev => ({ ...prev, loungeName: store.name, currency: store.currency || prev.currency }));
+    } catch (err) {
+      addLog("System", `Failed to load store profile: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
   useEffect(() => {
     if (!storeId) return;
     refreshCustomers();
     refreshGames();
     refreshCampaigns();
     refreshSystemTypes();
+    refreshStoreProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
@@ -357,6 +391,54 @@ function Dashboard() {
     }
   };
 
+  // HANDLER: Generic notification bridge for the newer, self-fetching views
+  // (Bookings/Billing/Payments/Analytics/Disputes/Notifications/Team) — they
+  // manage their own data fetching but still funnel messages through the
+  // same activity log as everything else.
+  const notify = (message: string, severity: "info" | "success" | "danger" | "warning") => {
+    addLog("System", message, severity);
+  };
+
+  // HANDLER: Register a new gaming terminal. Returns the raw API key exactly
+  // once (backend never shows it again) so the caller can display it.
+  const handleAddSystem = async (body: CreateSystemBody): Promise<string | null> => {
+    if (!storeId) return null;
+    try {
+      const result = await createSystem(storeId, body);
+      addLog("PC", `Registered new terminal: ${result.system.name}`, "success");
+      await refreshLiveData();
+      return result.apiKey;
+    } catch (err) {
+      addLog("System", `Failed to register terminal: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      return null;
+    }
+  };
+
+  const handleDeleteSystem = async (pcId: string) => {
+    if (!storeId) return;
+    const pc = pcs.find(p => p.id === pcId);
+    try {
+      await deactivateSystem(storeId, pcId);
+      addLog("PC", `${pc?.name || pcId} deactivated.`, "warning");
+      await refreshLiveData();
+    } catch (err) {
+      addLog("System", `Failed to deactivate terminal: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleRegenerateKey = async (pcId: string): Promise<string | null> => {
+    if (!storeId) return null;
+    const pc = pcs.find(p => p.id === pcId);
+    try {
+      const result = await regenerateSystemKey(storeId, pcId);
+      addLog("PC", `API key regenerated for ${pc?.name || pcId}.`, "success");
+      return result.apiKey;
+    } catch (err) {
+      addLog("System", `Failed to regenerate key: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      return null;
+    }
+  };
+
   // HANDLER: Register new customer — real endpoint, name + optional phone
   // only (see customers/service.ts on the backend for why email isn't
   // accepted here: it risks colliding with that person's own future
@@ -436,6 +518,16 @@ function Dashboard() {
     } catch (err) {
       addLog("System", `Failed to update game: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     }
+  };
+
+  const handleInstallGame = async (gameId: string, systemId: string) => {
+    if (!storeId) return;
+    await installGame(storeId, systemId, gameId);
+  };
+
+  const handleUninstallGame = async (gameId: string, systemId: string) => {
+    if (!storeId) return;
+    await uninstallGame(storeId, systemId, gameId);
   };
 
   // HANDLER: Create promotional campaign
@@ -586,7 +678,38 @@ function Dashboard() {
               onExtendSession={handleExtendSession}
               onLockPC={handleLockPC}
               onUnlockPC={handleUnlockPC}
+              onAddSystem={handleAddSystem}
+              onDeleteSystem={handleDeleteSystem}
+              onRegenerateKey={handleRegenerateKey}
             />
+          )}
+
+          {activeTab === "bookings" && (
+            <BookingsView pcs={pcs} customers={customers} onNotify={notify} />
+          )}
+
+          {activeTab === "billing" && (
+            <BillingView sessions={sessions} onNotify={notify} />
+          )}
+
+          {activeTab === "payments" && (
+            <PaymentsView customers={customers} onNotify={notify} />
+          )}
+
+          {activeTab === "analytics" && (
+            <AnalyticsView onNotify={notify} />
+          )}
+
+          {activeTab === "disputes" && (
+            <DisputesView customers={customers} onNotify={notify} />
+          )}
+
+          {activeTab === "notifications" && (
+            <NotificationsView customers={customers} onNotify={notify} />
+          )}
+
+          {activeTab === "team" && (
+            <TeamView onNotify={notify} />
           )}
 
           {activeTab === "sessions" && (
@@ -615,8 +738,12 @@ function Dashboard() {
           {activeTab === "games" && (
             <GameLibraryView
               games={games}
+              systems={pcs.map(p => ({ id: p.id, name: p.name }))}
+              storeId={storeId ?? ""}
               onAddGame={handleAddGame}
               onUpdateGameStatus={handleUpdateGameStatus}
+              onInstallGame={handleInstallGame}
+              onUninstallGame={handleUninstallGame}
             />
           )}
 

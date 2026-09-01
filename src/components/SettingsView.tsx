@@ -6,18 +6,135 @@ import {
   Shield,
   Clock,
   Building,
-  CheckCircle2
+  CheckCircle2,
+  QrCode,
+  Upload,
+  CalendarClock,
+  Monitor,
+  Plus,
+  X,
+  AlertCircle
 } from "lucide-react";
 import { SystemSettings } from "../types";
-import { ApiSystemType } from "../api/types";
+import { useAuth } from "../context/AuthContext";
+import { ApiError } from "../api/client";
+import { getPaymentQr, updatePaymentQr, getBookingConfig, updateBookingConfig, getKioskSettings, updateKioskSettings, ApiKioskSettings } from "../api/stores";
+import { ApiBookingConfig, ApiPaymentQr } from "../api/types";
 
 interface SettingsViewProps {
   settings: SystemSettings;
-  systemTypes: ApiSystemType[];
+  systemTypes: import("../api/types").ApiSystemType[];
   onSaveSettings: (settings: SystemSettings, rateChanges: { systemTypeId: string; hourlyBaseRate: number }[]) => void;
 }
 
 export default function SettingsView({ settings, systemTypes, onSaveSettings }: SettingsViewProps) {
+  const { storeId, admin } = useAuth();
+  const isSuperAdmin = admin?.role === "super_admin";
+
+  // ── Payment QR (real, super_admin editable) ─────────────────────────────
+  const [qr, setQr] = useState<ApiPaymentQr | null>(null);
+  const [qrPreview, setQrPreview] = useState<string | null>(null);
+  const [upiId, setUpiId] = useState<string>("");
+  const [savingQr, setSavingQr] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getPaymentQr(storeId)
+      .then((res) => {
+        setQr(res);
+        setUpiId(res.upiId || "");
+      })
+      .catch(() => {});
+  }, [storeId]);
+
+  const handleQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setQrPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveQr = async () => {
+    if (!storeId) return;
+    setSavingQr(true);
+    try {
+      const updated = await updatePaymentQr(storeId, {
+        upiQrImage: qrPreview || undefined,
+        upiId: upiId || undefined
+      });
+      setQr(updated);
+      setQrPreview(null);
+    } catch (err) {
+      window.alert(`Failed to save payment QR: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    } finally {
+      setSavingQr(false);
+    }
+  };
+
+  // ── Kiosk agent settings ─────────────────────────────────────────────────
+  const [kioskSettings, setKioskSettings] = useState<ApiKioskSettings | null>(null);
+  const [newApp, setNewApp] = useState<string>("");
+  const [savingKiosk, setSavingKiosk] = useState<boolean>(false);
+  const [kioskSaved, setKioskSaved] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getKioskSettings(storeId).then(setKioskSettings).catch(() => {});
+  }, [storeId]);
+
+  const handleAddApp = () => {
+    const name = newApp.toLowerCase().trim();
+    if (!name || !kioskSettings) return;
+    if (!kioskSettings.allowedApps.includes(name)) {
+      setKioskSettings({ ...kioskSettings, allowedApps: [...kioskSettings.allowedApps, name] });
+    }
+    setNewApp("");
+  };
+
+  const handleRemoveApp = (app: string) => {
+    if (!kioskSettings) return;
+    setKioskSettings({ ...kioskSettings, allowedApps: kioskSettings.allowedApps.filter((a) => a !== app) });
+  };
+
+  const handleSaveKiosk = async () => {
+    if (!storeId || !kioskSettings) return;
+    setSavingKiosk(true);
+    try {
+      const updated = await updateKioskSettings(storeId, kioskSettings);
+      setKioskSettings(updated);
+      setKioskSaved(true);
+      setTimeout(() => setKioskSaved(false), 3000);
+    } catch (err) {
+      window.alert(`Failed to save kiosk settings: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    } finally {
+      setSavingKiosk(false);
+    }
+  };
+
+  // ── Booking configuration (real, super_admin editable) ──────────────────
+  const [bookingConfig, setBookingConfig] = useState<ApiBookingConfig | null>(null);
+  const [savingConfig, setSavingConfig] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getBookingConfig(storeId)
+      .then(setBookingConfig)
+      .catch(() => {});
+  }, [storeId]);
+
+  const handleSaveBookingConfig = async () => {
+    if (!storeId || !bookingConfig) return;
+    setSavingConfig(true);
+    try {
+      setBookingConfig(await updateBookingConfig(storeId, bookingConfig));
+    } catch (err) {
+      window.alert(`Failed to save booking config: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   const [loungeName, setLoungeName] = useState<string>(settings.loungeName);
   const [currencySymbol, setCurrencySymbol] = useState<string>(settings.currencySymbol);
   const [taxRate, setTaxRate] = useState<number>(settings.taxRate);
@@ -255,6 +372,216 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
         </div>
 
       </form>
+
+      {/* Payment QR & Booking Configuration — real backend, independent save actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* UPI Payment QR */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4">
+          <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
+            <QrCode className="w-4.5 h-4.5 text-indigo-600" />
+            <span>UPI Payment QR</span>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Upload your own UPI QR (PhonePe, GPay, etc). No payment gateway — customers scan and pay you directly, staff record it afterward from the Payments tab.
+          </p>
+
+          <div className="flex items-center gap-4">
+            <div className="w-28 h-28 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+              {qrPreview || qr?.upiQrImage ? (
+                <img src={qrPreview || qr?.upiQrImage || ""} alt="UPI QR" className="w-full h-full object-contain" />
+              ) : (
+                <QrCode className="w-8 h-8 text-slate-300" />
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              {isSuperAdmin && (
+                <label className="flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-slate-300 rounded-lg text-[11px] font-semibold text-slate-500 hover:bg-slate-50 cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload image</span>
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleQrFileChange} className="hidden" />
+                </label>
+              )}
+              <input
+                type="text"
+                value={upiId}
+                onChange={(e) => setUpiId(e.target.value)}
+                disabled={!isSuperAdmin}
+                placeholder="yourstore@upi (optional)"
+                className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none disabled:opacity-60"
+              />
+            </div>
+          </div>
+
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={handleSaveQr}
+              disabled={savingQr || (!qrPreview && upiId === (qr?.upiId || ""))}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold transition-all"
+            >
+              {savingQr ? "Saving…" : "Save Payment QR"}
+            </button>
+          )}
+        </div>
+
+        {/* Booking configuration */}
+        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4">
+          <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
+            <CalendarClock className="w-4.5 h-4.5 text-indigo-600" />
+            <span>Booking Configuration</span>
+          </div>
+          {bookingConfig ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Booking window (min)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1440}
+                  disabled={!isSuperAdmin}
+                  value={bookingConfig.bookingWindowMinutes}
+                  onChange={(e) => setBookingConfig({ ...bookingConfig, bookingWindowMinutes: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none disabled:opacity-60"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Payment window (min)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1440}
+                  disabled={!isSuperAdmin}
+                  value={bookingConfig.paymentWindowMinutes}
+                  onChange={(e) => setBookingConfig({ ...bookingConfig, paymentWindowMinutes: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none disabled:opacity-60"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">No-show grace (min)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  disabled={!isSuperAdmin}
+                  value={bookingConfig.noShowGraceMinutes}
+                  onChange={(e) => setBookingConfig({ ...bookingConfig, noShowGraceMinutes: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none disabled:opacity-60"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Early check-in (min)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  disabled={!isSuperAdmin}
+                  value={bookingConfig.checkInEarlyMinutes}
+                  onChange={(e) => setBookingConfig({ ...bookingConfig, checkInEarlyMinutes: parseInt(e.target.value) || 0 })}
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none disabled:opacity-60"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">Loading…</p>
+          )}
+          {isSuperAdmin && bookingConfig && (
+            <button
+              type="button"
+              onClick={handleSaveBookingConfig}
+              disabled={savingConfig}
+              className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 text-white rounded-lg text-xs font-bold transition-all"
+            >
+              {savingConfig ? "Saving…" : "Save Booking Config"}
+            </button>
+          )}
+        </div>
+
+        {/* Kiosk Agent Settings */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
+            <Monitor className="w-4.5 h-4.5 text-indigo-600" />
+            <span>Kiosk Agent</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            The agent app installed on each gaming PC enforces these settings. Only listed processes are allowed to run — everything else is closed automatically. Changes push live to all online agents.
+          </p>
+
+          {kioskSettings ? (
+            <>
+              {/* Warning minutes */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Low-credit warning (minutes before expiry)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={kioskSettings.warningMinutes}
+                  onChange={(e) => setKioskSettings({ ...kioskSettings, warningMinutes: parseInt(e.target.value) || 5 })}
+                  disabled={!isSuperAdmin}
+                  className="w-28 px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 font-mono disabled:opacity-50"
+                />
+              </div>
+
+              {/* App whitelist */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Allowed processes</label>
+                {kioskSettings.allowedApps.length === 0 ? (
+                  <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>No apps listed — enforcement is disabled. Add process names to enable.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {kioskSettings.allowedApps.map((app) => (
+                      <span key={app} className="flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-mono px-2 py-0.5 rounded-md">
+                        {app}
+                        {isSuperAdmin && (
+                          <button type="button" onClick={() => handleRemoveApp(app)} className="text-indigo-400 hover:text-red-500 ml-0.5">
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {isSuperAdmin && (
+                  <div className="flex gap-2">
+                    <input
+                      value={newApp}
+                      onChange={(e) => setNewApp(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddApp()}
+                      placeholder="e.g. csgo.exe"
+                      className="flex-1 px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddApp}
+                      disabled={!newApp.trim()}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={handleSaveKiosk}
+                  disabled={savingKiosk}
+                  className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  {kioskSaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingKiosk ? "Saving…" : kioskSaved ? "Saved!" : "Save & Push to Agents"}
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-slate-400">Loading…</p>
+          )}
+        </div>
+      </div>
     </motion.div>
   );
 }
