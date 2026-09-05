@@ -20,6 +20,7 @@ interface LoginViewProps {
 
 export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
   const { login, userLogin, error } = useAuth();
+  const isDesktop = typeof window !== "undefined" && window.__DESKTOP_APP__ === true;
   const [mode, setMode] = useState<Mode>("login");
   const [role, setRole] = useState<Role>("admin");
 
@@ -210,35 +211,37 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
                   transition={{ duration: 0.2 }}
                   className="pb-7"
                 >
-                  {/* Role toggle */}
-                  <div className="px-8 mb-5">
-                    <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
-                      <button
-                        type="button"
-                        onClick={() => switchRole("admin")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          role === "admin"
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-400 hover:text-slate-600"
-                        }`}
-                      >
-                        <Shield className="w-3.5 h-3.5" />
-                        Admin
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => switchRole("player")}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          role === "player"
-                            ? "bg-white text-slate-900 shadow-sm"
-                            : "text-slate-400 hover:text-slate-600"
-                        }`}
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        Player
-                      </button>
+                  {/* Role toggle — hidden in desktop app (admin-only) */}
+                  {!isDesktop && (
+                    <div className="px-8 mb-5">
+                      <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => switchRole("admin")}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                            role === "admin"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-400 hover:text-slate-600"
+                          }`}
+                        >
+                          <Shield className="w-3.5 h-3.5" />
+                          Admin
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => switchRole("player")}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                            role === "player"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-400 hover:text-slate-600"
+                          }`}
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          Player
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* ── Admin form ── */}
                   {role === "admin" && (
@@ -314,13 +317,15 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
                         {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         <span>{submitting ? "Signing in..." : "Sign In"}</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={onSwitchToSignup}
-                        className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
-                      >
-                        No account? <span className="text-indigo-600">Sign up your gaming zone</span>
-                      </button>
+                      {!isDesktop && (
+                        <button
+                          type="button"
+                          onClick={onSwitchToSignup}
+                          className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                        >
+                          No account? <span className="text-indigo-600">Sign up your gaming zone</span>
+                        </button>
+                      )}
                     </form>
                   )}
 

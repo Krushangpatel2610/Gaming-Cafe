@@ -1,6 +1,9 @@
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+const BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
 const TOKEN_KEY = "gc_admin_token";
+const USER_REFRESH_KEY = "gc_user_refresh_token";
+const ADMIN_REFRESH_KEY = "gc_admin_refresh_token";
+const SESSION_TYPE_KEY = "gc_session_type";
 
 export class ApiError extends Error {
   code: string;
@@ -48,6 +51,32 @@ export interface ApiListResult<T> {
   meta?: ApiEnvelope<T>["meta"];
 }
 
+let isRefreshing = false;
+
+async function tryRefresh(): Promise<string | null> {
+  const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
+  if (sessionType !== "user") return null;
+
+  const refreshToken = localStorage.getItem(USER_REFRESH_KEY);
+  if (!refreshToken) return null;
+
+  try {
+    const response = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (!body.success || !body.data?.accessToken) return null;
+    setStoredToken(body.data.accessToken);
+    localStorage.setItem(USER_REFRESH_KEY, body.data.refreshToken);
+    return body.data.accessToken as string;
+  } catch {
+    return null;
+  }
+}
+
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<ApiListResult<T>> {
   const token = getStoredToken();
   const headers: Record<string, string> = {
@@ -63,6 +92,22 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
     response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   } catch {
     throw new ApiError("Unable to reach the server. Check your connection or API base URL.", "NETWORK_ERROR", 0);
+  }
+
+  // Auto-refresh on 401 for user sessions
+  if (response.status === 401 && !isRefreshing) {
+    isRefreshing = true;
+    const newToken = await tryRefresh();
+    isRefreshing = false;
+
+    if (newToken) {
+      headers["Authorization"] = `Bearer ${newToken}`;
+      try {
+        response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+      } catch {
+        throw new ApiError("Unable to reach the server.", "NETWORK_ERROR", 0);
+      }
+    }
   }
 
   let body: ApiEnvelope<T> | null = null;
