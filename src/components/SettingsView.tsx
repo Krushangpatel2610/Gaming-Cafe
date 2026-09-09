@@ -13,13 +13,23 @@ import {
   Monitor,
   Plus,
   X,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Trash2
 } from "lucide-react";
 import { SystemSettings } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { getPaymentQr, updatePaymentQr, getBookingConfig, updateBookingConfig, getKioskSettings, updateKioskSettings, ApiKioskSettings } from "../api/stores";
-import { ApiBookingConfig, ApiPaymentQr } from "../api/types";
+import {
+  getLoyaltySettings,
+  updateLoyaltySettings,
+  listLoyaltyRewardsAdmin,
+  createLoyaltyReward,
+  updateLoyaltyReward,
+  deleteLoyaltyReward,
+} from "../api/loyalty";
+import { ApiBookingConfig, ApiPaymentQr, ApiLoyaltySettings, ApiLoyaltyReward } from "../api/types";
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -109,6 +119,88 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
       window.alert(`Failed to save kiosk settings: ${err instanceof ApiError ? err.message : "unknown error"}`);
     } finally {
       setSavingKiosk(false);
+    }
+  };
+
+  // ── Loyalty points (real, admin/super_admin editable) ────────────────────
+  const [loyaltySettings, setLoyaltySettings] = useState<ApiLoyaltySettings | null>(null);
+  const [pointsPerHour, setPointsPerHour] = useState<number>(0);
+  const [loyaltyActive, setLoyaltyActive] = useState<boolean>(true);
+  const [savingLoyalty, setSavingLoyalty] = useState<boolean>(false);
+  const [loyaltySaved, setLoyaltySaved] = useState<boolean>(false);
+  const isStaff = admin?.role === "staff";
+
+  const [rewards, setRewards] = useState<ApiLoyaltyReward[]>([]);
+  const [newRewardName, setNewRewardName] = useState("");
+  const [newRewardCost, setNewRewardCost] = useState<number>(100);
+  const [newRewardStock, setNewRewardStock] = useState<string>("");
+  const [savingReward, setSavingReward] = useState(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getLoyaltySettings(storeId)
+      .then((s) => {
+        setLoyaltySettings(s);
+        setPointsPerHour(parseFloat(s.pointsPerHour));
+        setLoyaltyActive(s.isActive);
+      })
+      .catch(() => {});
+    listLoyaltyRewardsAdmin(storeId).then(setRewards).catch(() => {});
+  }, [storeId]);
+
+  const handleSaveLoyalty = async () => {
+    if (!storeId) return;
+    setSavingLoyalty(true);
+    try {
+      const updated = await updateLoyaltySettings(storeId, { pointsPerHour, isActive: loyaltyActive });
+      setLoyaltySettings(updated);
+      setLoyaltySaved(true);
+      setTimeout(() => setLoyaltySaved(false), 3000);
+    } catch (err) {
+      window.alert(`Failed to save loyalty settings: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    } finally {
+      setSavingLoyalty(false);
+    }
+  };
+
+  const handleAddReward = async () => {
+    if (!storeId || !newRewardName.trim() || newRewardCost <= 0) return;
+    setSavingReward(true);
+    try {
+      const created = await createLoyaltyReward(storeId, {
+        name: newRewardName.trim(),
+        pointsCost: newRewardCost,
+        stock: newRewardStock.trim() ? parseInt(newRewardStock, 10) : undefined,
+      });
+      setRewards((prev) => [...prev, created]);
+      setNewRewardName("");
+      setNewRewardCost(100);
+      setNewRewardStock("");
+    } catch (err) {
+      window.alert(`Failed to create reward: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    } finally {
+      setSavingReward(false);
+    }
+  };
+
+  const handleToggleReward = async (reward: ApiLoyaltyReward) => {
+    if (!storeId) return;
+    try {
+      const updated = await updateLoyaltyReward(storeId, reward.id, { isActive: !reward.isActive });
+      setRewards((prev) => prev.map((r) => (r.id === reward.id ? updated : r)));
+    } catch (err) {
+      window.alert(`Failed to update reward: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    }
+  };
+
+  const handleDeleteReward = async (reward: ApiLoyaltyReward) => {
+    if (!storeId) return;
+    if (!window.confirm(`Delete reward "${reward.name}"?`)) return;
+    try {
+      await deleteLoyaltyReward(storeId, reward.id);
+      setRewards((prev) => prev.filter((r) => r.id !== reward.id));
+    } catch (err) {
+      window.alert(`Failed to delete reward: ${err instanceof ApiError ? err.message : "unknown error"}`);
     }
   };
 
@@ -580,6 +672,135 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
           ) : (
             <p className="text-xs text-slate-400">Loading…</p>
           )}
+        </div>
+
+        {/* Loyalty Points */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4 md:col-span-2">
+          <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
+            <Sparkles className="w-4.5 h-4.5 text-amber-500" />
+            <span>Loyalty Points</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Players earn points automatically when a session ends, based on the rate below. Redeemable rewards show up on the player app.
+          </p>
+
+          {loyaltySettings ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Points per hour played</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.5"
+                  disabled={isStaff}
+                  value={pointsPerHour}
+                  onChange={(e) => setPointsPerHour(parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:opacity-50"
+                />
+              </div>
+              <div className="flex items-center justify-between sm:justify-start sm:gap-3">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Enabled</span>
+                <button
+                  type="button"
+                  disabled={isStaff}
+                  onClick={() => setLoyaltyActive(!loyaltyActive)}
+                  className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-150 focus:outline-none disabled:opacity-50 ${
+                    loyaltyActive ? "bg-amber-500" : "bg-slate-300"
+                  }`}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-150 ${
+                    loyaltyActive ? "translate-x-5" : "translate-x-0"
+                  }`} />
+                </button>
+              </div>
+              {!isStaff && (
+                <button
+                  type="button"
+                  onClick={handleSaveLoyalty}
+                  disabled={savingLoyalty}
+                  className="py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-200 text-slate-950 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  {loyaltySaved ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  {savingLoyalty ? "Saving…" : loyaltySaved ? "Saved!" : "Save Rules"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">Loading…</p>
+          )}
+
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Redeemable Rewards</label>
+
+            {rewards.length === 0 ? (
+              <p className="text-xs text-slate-400">No rewards yet — add one below.</p>
+            ) : (
+              <div className="space-y-2">
+                {rewards.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold truncate ${r.isActive ? "text-slate-700" : "text-slate-400 line-through"}`}>{r.name}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {r.pointsCost} pts{r.stock !== null ? ` · ${r.stock} in stock` : ""}
+                      </p>
+                    </div>
+                    {!isStaff && (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleReward(r)}
+                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800"
+                        >
+                          {r.isActive ? "Disable" : "Enable"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteReward(r)}
+                          className="text-slate-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isStaff && (
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-2 pt-1">
+                <input
+                  value={newRewardName}
+                  onChange={(e) => setNewRewardName(e.target.value)}
+                  placeholder="Reward name, e.g. Free hour"
+                  className="px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={newRewardCost}
+                  onChange={(e) => setNewRewardCost(parseInt(e.target.value, 10) || 0)}
+                  placeholder="Points"
+                  className="w-24 px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <input
+                  value={newRewardStock}
+                  onChange={(e) => setNewRewardStock(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="Stock (blank = ∞)"
+                  className="w-32 px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddReward}
+                  disabled={savingReward || !newRewardName.trim() || newRewardCost <= 0}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

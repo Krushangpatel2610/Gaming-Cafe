@@ -399,15 +399,16 @@ function Dashboard() {
     addLog("System", message, severity);
   };
 
-  // HANDLER: Register a new gaming terminal. Returns the raw API key exactly
-  // once (backend never shows it again) so the caller can display it.
-  const handleAddSystem = async (body: CreateSystemBody): Promise<string | null> => {
+  // HANDLER: Register a new gaming terminal. Returns the System ID + raw API
+  // key exactly once (backend never shows the key again) so the caller can
+  // display both — the PC Client installer asks for this exact pair.
+  const handleAddSystem = async (body: CreateSystemBody): Promise<{ systemId: string; apiKey: string } | null> => {
     if (!storeId) return null;
     try {
       const result = await createSystem(storeId, body);
       addLog("PC", `Registered new terminal: ${result.system.name}`, "success");
       await refreshLiveData();
-      return result.apiKey;
+      return { systemId: result.system.id, apiKey: result.apiKey };
     } catch (err) {
       addLog("System", `Failed to register terminal: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
       return null;

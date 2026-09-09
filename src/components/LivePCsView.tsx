@@ -38,7 +38,7 @@ interface LivePCsViewProps {
   onExtendSession: (pcId: string, additionalMinutes: number) => void;
   onLockPC: (pcId: string) => void;
   onUnlockPC: (pcId: string) => void;
-  onAddSystem: (body: CreateSystemBody) => Promise<string | null>;
+  onAddSystem: (body: CreateSystemBody) => Promise<{ systemId: string; apiKey: string } | null>;
   onDeleteSystem: (pcId: string) => void;
   onRegenerateKey: (pcId: string) => Promise<string | null>;
 }
@@ -80,6 +80,7 @@ export default function LivePCsView({
   const [newRam, setNewRam] = useState<string>("");
   const [newMonitor, setNewMonitor] = useState<string>("");
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
+  const [revealedSystemId, setRevealedSystemId] = useState<string | null>(null);
 
   // Modal State for starting a session
   const [startSessionPCId, setStartSessionPCId] = useState<string | null>(null);
@@ -170,7 +171,7 @@ export default function LivePCsView({
     if (newRam) specs.ram = newRam;
     if (newMonitor) specs.monitor = newMonitor;
 
-    const apiKey = await onAddSystem({
+    const result = await onAddSystem({
       name: newName,
       stationNumber: newStationNumber,
       platform: newPlatform,
@@ -181,13 +182,19 @@ export default function LivePCsView({
     });
     setShowAddModal(false);
     resetAddForm();
-    if (apiKey) setRevealedApiKey(apiKey);
+    if (result) {
+      setRevealedApiKey(result.apiKey);
+      setRevealedSystemId(result.systemId);
+    }
   };
 
   const handleRegenerateClick = async (pcId: string, pcName: string) => {
     if (!window.confirm(`Regenerate the API key for ${pcName}? The old key will stop working immediately — update the agent config right after.`)) return;
     const apiKey = await onRegenerateKey(pcId);
-    if (apiKey) setRevealedApiKey(apiKey);
+    if (apiKey) {
+      setRevealedApiKey(apiKey);
+      setRevealedSystemId(pcId);
+    }
   };
 
   const handleDeleteClick = (pcId: string, pcName: string) => {
@@ -847,28 +854,51 @@ export default function LivePCsView({
         </div>
       )}
 
-      {/* MODAL: Reveal API key — shown exactly once, on create or regenerate */}
+      {/* MODAL: Reveal System ID + API key — shown exactly once, on create or regenerate.
+          These are the exact two values the PC Client installer asks for
+          ("System ID (this specific PC)" and "Agent API Key") — surfacing
+          both together here means nobody has to hunt for the System ID
+          separately when pairing the physical machine. */}
       {revealedApiKey && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-amber-50">
-              <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2"><KeyRound className="w-4 h-4 text-amber-600" />Terminal API Key</h3>
-              <p className="text-xs text-amber-700 mt-1">Save this now — it will not be shown again. Configure it in the PC Client agent.</p>
+              <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2"><KeyRound className="w-4 h-4 text-amber-600" />Terminal Connection Details</h3>
+              <p className="text-xs text-amber-700 mt-1">Save these now — the API key will not be shown again. Enter both into the PC Client installer on this station.</p>
             </div>
             <div className="p-5 space-y-3">
-              <div className="flex items-center gap-2 bg-slate-900 text-emerald-400 font-mono text-xs rounded-lg p-3 break-all">
-                <span className="flex-1">{revealedApiKey}</span>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(revealedApiKey)}
-                  className="text-slate-400 hover:text-white shrink-0"
-                  title="Copy to clipboard"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+              {revealedSystemId && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System ID</label>
+                  <div className="flex items-center gap-2 bg-slate-900 text-indigo-300 font-mono text-xs rounded-lg p-3 break-all">
+                    <span className="flex-1">{revealedSystemId}</span>
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(revealedSystemId)}
+                      className="text-slate-400 hover:text-white shrink-0"
+                      title="Copy to clipboard"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Agent API Key</label>
+                <div className="flex items-center gap-2 bg-slate-900 text-emerald-400 font-mono text-xs rounded-lg p-3 break-all">
+                  <span className="flex-1">{revealedApiKey}</span>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard.writeText(revealedApiKey)}
+                    className="text-slate-400 hover:text-white shrink-0"
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <button
-                onClick={() => setRevealedApiKey(null)}
+                onClick={() => { setRevealedApiKey(null); setRevealedSystemId(null); }}
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
               >
                 Done — I've saved it

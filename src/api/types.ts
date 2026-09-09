@@ -492,3 +492,58 @@ export interface ApiUserDashboard {
     playCount: number;
   }>;
 }
+
+// ── Loyalty ─────────────────────────────────────────────────────────────
+
+export type ApiLoyaltyTransactionType = "earned" | "redeemed" | "admin_adjust" | "expired";
+
+export interface ApiLoyaltyTransaction {
+  id: string;
+  storeId: string;
+  userId: string;
+  transactionType: ApiLoyaltyTransactionType;
+  points: number;
+  balanceAfter: number;
+  sourceId: string | null;
+  sourceType: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface ApiLoyaltySettings {
+  storeId: string;
+  pointsPerHour: string;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface ApiLoyaltyReward {
+  id: string;
+  storeId: string;
+  name: string;
+  description: string | null;
+  pointsCost: number;
+  stock: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Credit Ledger Transactions ──────────────────────────────────────────────
+
+export type ApiCreditTransactionType = "earned" | "redeemed" | "bonus" | "admin_adjust" | "expired" | "refund";
+
+export interface ApiCreditTransaction {
+  id: string;
+  storeId: string;
+  userId: string;
+  transactionType: ApiCreditTransactionType;
+  amount: string;
+  balanceAfter: string;
+  sourceId: string | null;
+  sourceType: string | null;
+  description: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+

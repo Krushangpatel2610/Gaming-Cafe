@@ -49,3 +49,37 @@ export function checkAvailability(
 ): Promise<ApiAvailabilityResult> {
   return apiGet(`/stores/${storeId}/bookings/availability${toQueryString(params)}`);
 }
+
+export interface CreateBookingBody {
+  systemId: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  notes?: string;
+}
+
+export function createBooking(
+  storeId: string,
+  body: CreateBookingBody
+): Promise<{ booking: ApiBooking; expiresAt?: string }> {
+  return apiPost(`/stores/${storeId}/bookings`, body);
+}
+
+export async function getMyBookings(
+  storeId: string,
+  params?: { page?: number; limit?: number; status?: string }
+) {
+  return apiGetPaginated<ApiBooking[]>(`/stores/${storeId}/bookings/my${toQueryString(params)}`);
+}
+
+export function payBooking(storeId: string, bookingId: string): Promise<{ booking: ApiBooking }> {
+  return apiPost(`/stores/${storeId}/bookings/${bookingId}/pay`);
+}
+
+export function cancelBooking(storeId: string, bookingId: string): Promise<{ booking: ApiBooking }> {
+  return apiPost(`/stores/${storeId}/bookings/${bookingId}/cancel`);
+}
+
+export function checkInBooking(storeId: string, bookingId: string): Promise<{ booking: ApiBooking }> {
+  return apiPost(`/stores/${storeId}/bookings/${bookingId}/check-in`);
+}
+

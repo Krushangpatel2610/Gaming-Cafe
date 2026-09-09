@@ -38,3 +38,21 @@ export function pauseCampaign(storeId: string, campaignId: string): Promise<{ ca
 export function resumeCampaign(storeId: string, campaignId: string): Promise<{ campaign: ApiCampaign }> {
   return apiPost(`/stores/${storeId}/campaigns/${campaignId}/resume`);
 }
+
+export function listActiveCampaigns(storeId: string): Promise<ApiCampaign[]> {
+  return apiGet<ApiCampaign[]>(`/stores/${storeId}/campaigns/active`);
+}
+
+export interface RedeemCampaignBody {
+  sessionId?: string;
+  billingId?: string;
+}
+
+export function redeemCampaign(
+  storeId: string,
+  campaignId: string,
+  body?: RedeemCampaignBody
+): Promise<{ redemption: unknown; discountAmount: number }> {
+  return apiPost(`/stores/${storeId}/campaigns/${campaignId}/redeem`, body ?? {});
+}
+
