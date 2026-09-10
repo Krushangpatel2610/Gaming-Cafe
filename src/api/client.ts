@@ -1,4 +1,5 @@
-const BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const RAW_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const BASE_URL = RAW_BASE_URL.replace(/\/+$/, "");
 
 const TOKEN_KEY = "gc_admin_token";
 const USER_REFRESH_KEY = "gc_user_refresh_token";
@@ -53,6 +54,12 @@ export interface ApiListResult<T> {
 
 let isRefreshing = false;
 
+function buildUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = `/${path.replace(/^\/+/, "")}`;
+  return `${BASE_URL}${normalizedPath}`;
+}
+
 async function tryRefresh(): Promise<string | null> {
   const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
   if (sessionType !== "user") return null;
@@ -61,7 +68,7 @@ async function tryRefresh(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const response = await fetch(`${BASE_URL}/auth/refresh`, {
+    const response = await fetch(buildUrl("/auth/refresh"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
@@ -89,7 +96,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
 
   let response: Response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+    response = await fetch(buildUrl(path), { ...options, headers });
   } catch {
     throw new ApiError("Unable to reach the server. Check your connection or API base URL.", "NETWORK_ERROR", 0);
   }
@@ -103,7 +110,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`;
       try {
-        response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+        response = await fetch(buildUrl(path), { ...options, headers });
       } catch {
         throw new ApiError("Unable to reach the server.", "NETWORK_ERROR", 0);
       }
