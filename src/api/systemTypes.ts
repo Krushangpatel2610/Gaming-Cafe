@@ -11,15 +11,17 @@ export function createSystemType(storeId: string, body: CreateSystemTypeBody): P
   return apiPost(`/stores/${storeId}/system-types`, body);
 }
 
+// Admin-facing: the live backend (main branch) puts the admin listing at
+// "/all" — the player route below owns bare "/" on this branch (both are
+// GET on the same store-scoped prefix, so they can't share a path — see
+// the backend's system-types module for why).
 export function listSystemTypes(storeId: string): Promise<ApiSystemType[]> {
-  return apiGet<ApiSystemType[]>(`/stores/${storeId}/system-types`);
+  return apiGet<ApiSystemType[]>(`/stores/${storeId}/system-types/all`);
 }
 
-// Player-facing: active-only, hits a distinct sub-path from the admin route
-// above (both are GET on the same store-scoped prefix, so they can't share
-// a bare "/" — see the backend's system-types module for why).
+// Player-facing: owns bare "/" on the live backend.
 export function listActiveSystemTypes(storeId: string): Promise<ApiSystemType[]> {
-  return apiGet<ApiSystemType[]>(`/stores/${storeId}/system-types/active`);
+  return apiGet<ApiSystemType[]>(`/stores/${storeId}/system-types`);
 }
 
 export function updateSystemTypeRate(storeId: string, systemTypeId: string, hourlyBaseRate: number): Promise<ApiSystemType> {
