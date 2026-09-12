@@ -21,12 +21,13 @@ import {
   ChevronDown,
   Trash2,
   KeyRound,
-  Copy
+  Copy,
+  Pencil
 } from "lucide-react";
 import { PC, PCStatus, PCGroup } from "../types";
 import { ApiCustomer, ApiSystemType, ApiSystemPlatform } from "../api/types";
 import { useAuth } from "../context/AuthContext";
-import { CreateSystemBody } from "../api/systems";
+import { CreateSystemBody, UpdateSystemBody } from "../api/systems";
 
 interface LivePCsViewProps {
   pcs: PC[];
@@ -39,6 +40,8 @@ interface LivePCsViewProps {
   onLockPC: (pcId: string) => void;
   onUnlockPC: (pcId: string) => void;
   onAddSystem: (body: CreateSystemBody) => Promise<{ systemId: string; apiKey: string } | null>;
+  onEditSystem: (pcId: string, body: UpdateSystemBody) => Promise<boolean>;
+  onCreateSystemType: (name: string, hourlyBaseRate: number) => Promise<string | null>;
   onDeleteSystem: (pcId: string) => void;
   onRegenerateKey: (pcId: string) => Promise<string | null>;
 }
@@ -56,6 +59,8 @@ export default function LivePCsView({
   onLockPC,
   onUnlockPC,
   onAddSystem,
+  onEditSystem,
+  onCreateSystemType,
   onDeleteSystem,
   onRegenerateKey
 }: LivePCsViewProps) {
@@ -73,6 +78,7 @@ export default function LivePCsView({
   const [newStationNumber, setNewStationNumber] = useState<number>(1);
   const [newPlatform, setNewPlatform] = useState<ApiSystemPlatform>("pc");
   const [newSystemTypeId, setNewSystemTypeId] = useState<string>("");
+  const [newCustomRate, setNewCustomRate] = useState<string>("");
   const [newIp, setNewIp] = useState<string>("");
   const [newMac, setNewMac] = useState<string>("");
   const [newCpu, setNewCpu] = useState<string>("");
@@ -81,6 +87,16 @@ export default function LivePCsView({
   const [newMonitor, setNewMonitor] = useState<string>("");
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
   const [revealedSystemId, setRevealedSystemId] = useState<string | null>(null);
+
+  // Edit Terminal modal state — rename + reassign pricing tier (systemTypeId).
+  // "__custom__" is a sentinel select value (never a real systemTypeId) that
+  // reveals a rate input; submitting creates a one-off system type for it.
+  const [editPCId, setEditPCId] = useState<string | null>(null);
+  const [editName, setEditName] = useState<string>("");
+  const [editSystemTypeId, setEditSystemTypeId] = useState<string>("");
+  const [editCustomRate, setEditCustomRate] = useState<string>("");
+  const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
+  const CUSTOM_RATE_VALUE = "__custom__";
 
   // Modal State for starting a session
   const [startSessionPCId, setStartSessionPCId] = useState<string | null>(null);
@@ -154,6 +170,7 @@ export default function LivePCsView({
     setNewStationNumber(pcs.length + 1);
     setNewPlatform("pc");
     setNewSystemTypeId("");
+    setNewCustomRate("");
     setNewIp("");
     setNewMac("");
     setNewCpu("");
@@ -171,11 +188,20 @@ export default function LivePCsView({
     if (newRam) specs.ram = newRam;
     if (newMonitor) specs.monitor = newMonitor;
 
+    let systemTypeId = newSystemTypeId || undefined;
+    if (newSystemTypeId === CUSTOM_RATE_VALUE) {
+      const rate = parseFloat(newCustomRate);
+      if (!rate || rate <= 0) return;
+      const newTypeId = await onCreateSystemType(`${newName} — Custom Rate`, rate);
+      if (!newTypeId) return;
+      systemTypeId = newTypeId;
+    }
+
     const result = await onAddSystem({
       name: newName,
       stationNumber: newStationNumber,
       platform: newPlatform,
-      systemTypeId: newSystemTypeId || undefined,
+      systemTypeId,
       ipAddress: newIp || undefined,
       macAddress: newMac || undefined,
       specs: Object.keys(specs).length > 0 ? specs : undefined
@@ -201,6 +227,40 @@ export default function LivePCsView({
     if (!window.confirm(`Deactivate ${pcName}? It will no longer appear as a bookable terminal.`)) return;
     onDeleteSystem(pcId);
   };
+
+  const handleEditClick = (pc: PC) => {
+    setEditPCId(pc.id);
+    setEditName(pc.name);
+    setEditSystemTypeId(pc.systemTypeId || "");
+    setEditCustomRate("");
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPCId) return;
+    setEditSubmitting(true);
+
+    let systemTypeId = editSystemTypeId || undefined;
+    if (editSystemTypeId === CUSTOM_RATE_VALUE) {
+      const rate = parseFloat(editCustomRate);
+      if (!rate || rate <= 0) {
+        setEditSubmitting(false);
+        return;
+      }
+      const newTypeId = await onCreateSystemType(`${editName} — Custom Rate`, rate);
+      if (!newTypeId) {
+        setEditSubmitting(false);
+        return;
+      }
+      systemTypeId = newTypeId;
+    }
+
+    const ok = await onEditSystem(editPCId, { name: editName, systemTypeId });
+    setEditSubmitting(false);
+    if (ok) setEditPCId(null);
+  };
+
+  const editPC = pcs.find(p => p.id === editPCId);
 
   return (
     <motion.div
@@ -494,6 +554,13 @@ export default function LivePCsView({
                   {canManageHardware && (
                     <>
                       <button
+                        onClick={() => handleEditClick(pc)}
+                        className="px-2 py-1 bg-white hover:bg-indigo-50 border border-slate-200 text-slate-500 hover:text-indigo-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                        title="Edit terminal name / pricing tier"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
                         onClick={() => handleRegenerateClick(pc.id, pc.name)}
                         className="px-2 py-1 bg-white hover:bg-amber-50 border border-slate-200 text-slate-500 hover:text-amber-700 rounded text-[10px] font-bold flex items-center space-x-1"
                         title="Regenerate this terminal's API key"
@@ -730,6 +797,91 @@ export default function LivePCsView({
         </div>
       )}
 
+      {/* MODAL: Edit Terminal — rename + reassign pricing tier. Pricing is
+          per-system-type, not per-PC, so "changing the price" here means
+          picking a different tier rather than typing a custom rate. */}
+      {editPCId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden"
+          >
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 font-display">Edit Terminal</h3>
+                <p className="text-xs text-slate-400 mt-1">Update {editPC?.name}'s name and pricing tier.</p>
+              </div>
+              <button onClick={() => setEditPCId(null)} className="text-slate-400 hover:text-slate-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Terminal Name</label>
+                <input
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System Type (sets hourly rate)</label>
+                <select
+                  value={editSystemTypeId}
+                  onChange={(e) => setEditSystemTypeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="">-- None (no rate assigned) --</option>
+                  {systemTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} — ₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr</option>
+                  ))}
+                  <option value={CUSTOM_RATE_VALUE}>Custom (enter rate)...</option>
+                </select>
+                {editSystemTypeId === CUSTOM_RATE_VALUE ? (
+                  <div className="pt-2 space-y-1">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">₹</span>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        autoFocus
+                        value={editCustomRate}
+                        onChange={(e) => setEditCustomRate(e.target.value)}
+                        placeholder="e.g. 150"
+                        className="w-full pl-6 pr-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">/hr</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">Creates a new pricing tier just for this rate — it won't affect other terminals.</p>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400 pt-1">Pricing is tied to the system type, not the individual terminal — reassign the tier to change this station's hourly rate.</p>
+                )}
+              </div>
+
+              <div className="flex space-x-3 pt-3 border-t border-slate-100">
+                <button type="button" onClick={() => setEditPCId(null)} className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 disabled:opacity-50"
+                >
+                  {editSubmitting ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
       {/* MODAL: Add Terminal — streamlined, name/platform/type up front, hardware details tucked behind Advanced */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -798,7 +950,28 @@ export default function LivePCsView({
                   {systemTypes.map((t) => (
                     <option key={t.id} value={t.id}>{t.name} — ₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr</option>
                   ))}
+                  <option value={CUSTOM_RATE_VALUE}>Custom (enter rate)...</option>
                 </select>
+                {newSystemTypeId === CUSTOM_RATE_VALUE && (
+                  <div className="pt-2 space-y-1">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-mono">₹</span>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        autoFocus
+                        value={newCustomRate}
+                        onChange={(e) => setNewCustomRate(e.target.value)}
+                        placeholder="e.g. 150"
+                        className="w-full pl-6 pr-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-mono"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-mono">/hr</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">Creates a new pricing tier just for this rate.</p>
+                  </div>
+                )}
               </div>
 
               <button

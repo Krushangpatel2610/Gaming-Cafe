@@ -21,7 +21,7 @@ import NotificationsView from "./components/NotificationsView";
 import TeamView from "./components/TeamView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
-import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody } from "./api/systems";
+import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
 import { listActiveSessions, listSessions, startManualSession, endSession, extendSession } from "./api/sessions";
 import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
@@ -29,7 +29,7 @@ import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } fr
 import { adjustCredits } from "./api/credits";
 import { listGames, createGame, updateGame, installGame, uninstallGame } from "./api/games";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
-import { listSystemTypes, updateSystemTypeRate } from "./api/systemTypes";
+import { listSystemTypes, updateSystemTypeRate, createSystemType } from "./api/systemTypes";
 import { updateStore, getStoreProfile } from "./api/stores";
 import { ApiCustomer, ApiGame, ApiCampaign, ApiSystemType } from "./api/types";
 
@@ -427,6 +427,36 @@ function Dashboard() {
     }
   };
 
+  // HANDLER: Create a one-off pricing tier for a custom rate typed into the
+  // Live PCs edit modal — pricing lives on system_types, not per-PC, so a
+  // "custom" rate becomes its own tier (rather than overwriting a shared
+  // tier's rate, which would silently reprice every other PC on it).
+  const handleCreateSystemType = async (name: string, hourlyBaseRate: number): Promise<string | null> => {
+    if (!storeId) return null;
+    try {
+      const result = await createSystemType(storeId, { name, hourlyBaseRate });
+      await refreshSystemTypes();
+      return result.systemType.id;
+    } catch (err) {
+      addLog("System", `Failed to create custom pricing tier: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      return null;
+    }
+  };
+
+  const handleEditSystem = async (pcId: string, body: UpdateSystemBody): Promise<boolean> => {
+    if (!storeId) return false;
+    const pc = pcs.find(p => p.id === pcId);
+    try {
+      await updateSystem(storeId, pcId, body);
+      addLog("PC", `${pc?.name || pcId} updated.`, "success");
+      await refreshLiveData();
+      return true;
+    } catch (err) {
+      addLog("System", `Failed to update terminal: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      return false;
+    }
+  };
+
   const handleRegenerateKey = async (pcId: string): Promise<string | null> => {
     if (!storeId) return null;
     const pc = pcs.find(p => p.id === pcId);
@@ -680,6 +710,8 @@ function Dashboard() {
               onLockPC={handleLockPC}
               onUnlockPC={handleUnlockPC}
               onAddSystem={handleAddSystem}
+              onEditSystem={handleEditSystem}
+              onCreateSystemType={handleCreateSystemType}
               onDeleteSystem={handleDeleteSystem}
               onRegenerateKey={handleRegenerateKey}
             />
