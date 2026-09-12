@@ -62,13 +62,16 @@ function buildUrl(path: string): string {
 
 async function tryRefresh(): Promise<string | null> {
   const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
-  if (sessionType !== "user") return null;
+  if (sessionType !== "user" && sessionType !== "admin") return null;
 
-  const refreshToken = localStorage.getItem(USER_REFRESH_KEY);
+  const refreshKey = sessionType === "admin" ? ADMIN_REFRESH_KEY : USER_REFRESH_KEY;
+  const refreshPath = sessionType === "admin" ? "/auth/admin/refresh" : "/auth/refresh";
+
+  const refreshToken = localStorage.getItem(refreshKey);
   if (!refreshToken) return null;
 
   try {
-    const response = await fetch(buildUrl("/auth/refresh"), {
+    const response = await fetch(buildUrl(refreshPath), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
@@ -77,7 +80,7 @@ async function tryRefresh(): Promise<string | null> {
     const body = await response.json();
     if (!body.success || !body.data?.accessToken) return null;
     setStoredToken(body.data.accessToken);
-    localStorage.setItem(USER_REFRESH_KEY, body.data.refreshToken);
+    localStorage.setItem(refreshKey, body.data.refreshToken);
     return body.data.accessToken as string;
   } catch {
     return null;
@@ -101,7 +104,7 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
     throw new ApiError("Unable to reach the server. Check your connection or API base URL.", "NETWORK_ERROR", 0);
   }
 
-  // Auto-refresh on 401 for user sessions
+  // Auto-refresh on 401 for user and admin sessions
   if (response.status === 401 && !isRefreshing) {
     isRefreshing = true;
     const newToken = await tryRefresh();
