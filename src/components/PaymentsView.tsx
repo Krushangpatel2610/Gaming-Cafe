@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { QrCode, Plus, X, Undo2, Wallet } from "lucide-react";
+import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from "../api/payments";
 import { getPaymentQr } from "../api/stores";
+import { listTopupRequests, confirmTopupRequest, rejectTopupRequest, ApiTopupRequest } from "../api/credits";
 import { ApiCustomer, ApiPayment, ApiPaymentMethod, ApiPaymentQr } from "../api/types";
 
 interface PaymentsViewProps {
@@ -39,8 +40,24 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
   const [userId, setUserId] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
 
+  const [topupRequests, setTopupRequests] = useState<ApiTopupRequest[]>([]);
+  const [rejectTarget, setRejectTarget] = useState<ApiTopupRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("");
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
   const canRecord = admin?.role === "super_admin" || admin?.role === "admin";
   const canRefund = admin?.role === "super_admin";
+  const canReviewTopups = admin?.role === "super_admin" || admin?.role === "admin";
+
+  const refreshTopupRequests = async () => {
+    if (!storeId) return;
+    try {
+      const { data } = await listTopupRequests(storeId, { status: "pending", limit: 50 });
+      setTopupRequests(data);
+    } catch (err) {
+      onNotify(`Failed to load top-up requests: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
 
   const refreshQr = async () => {
     if (!storeId) return;
@@ -71,6 +88,42 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
     refreshPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, page]);
+
+  useEffect(() => {
+    refreshTopupRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  const handleConfirmTopup = async (req: ApiTopupRequest) => {
+    if (!storeId) return;
+    setProcessingId(req.id);
+    try {
+      await confirmTopupRequest(storeId, req.id);
+      onNotify(`Confirmed ₹${parseFloat(req.amount).toFixed(2)} top-up — credits granted.`, "success");
+      await refreshTopupRequests();
+    } catch (err) {
+      onNotify(`Failed to confirm top-up: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeId || !rejectTarget) return;
+    setProcessingId(rejectTarget.id);
+    try {
+      await rejectTopupRequest(storeId, rejectTarget.id, rejectReason);
+      onNotify("Top-up request rejected.", "info");
+      setRejectTarget(null);
+      setRejectReason("");
+      await refreshTopupRequests();
+    } catch (err) {
+      onNotify(`Failed to reject top-up: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const handleRecordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +190,53 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
           )}
         </div>
       </div>
+
+      {/* Pending wallet top-up requests — player-submitted, needs staff confirm/reject */}
+      {canReviewTopups && topupRequests.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-100 bg-amber-50 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-600" />
+            <h3 className="text-sm font-bold text-amber-900">Pending Wallet Top-Ups ({topupRequests.length})</h3>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {topupRequests.map((req) => {
+              const cust = customers.find((c) => c.userId === req.userId);
+              return (
+                <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-mono font-bold text-slate-900 text-sm">₹{parseFloat(req.amount).toFixed(2)}</p>
+                      <span className="text-xs text-slate-500">{cust?.name || cust?.phone || req.userId.slice(0, 8)}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {new Date(req.createdAt).toLocaleString()}
+                      {req.utrReference && <> · UTR: {req.utrReference}</>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleConfirmTopup(req)}
+                      disabled={processingId === req.id}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setRejectTarget(req)}
+                      disabled={processingId === req.id}
+                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Payments table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-precision overflow-hidden">
@@ -280,6 +380,28 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
               <div className="flex space-x-3 pt-2">
                 <button type="button" onClick={() => setRefundTarget(null)} className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50">Cancel</button>
                 <button type="submit" className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow-lg">Confirm Refund</button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Reject top-up request */}
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900 font-display">Reject Top-Up Request</h3>
+              <p className="text-xs text-slate-400 mt-1">₹{parseFloat(rejectTarget.amount).toFixed(2)} request will be marked rejected — no credits granted.</p>
+            </div>
+            <form onSubmit={handleRejectSubmit} className="p-5 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Reason</label>
+                <textarea required minLength={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50" placeholder="e.g. Payment not received" />
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button type="button" onClick={() => setRejectTarget(null)} className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50">Cancel</button>
+                <button type="submit" className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow-lg">Confirm Reject</button>
               </div>
             </form>
           </motion.div>
