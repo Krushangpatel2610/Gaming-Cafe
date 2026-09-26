@@ -29,9 +29,11 @@ import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } fr
 import { adjustCredits } from "./api/credits";
 import { listGames, createGame, updateGame, installGame, uninstallGame } from "./api/games";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
+import { listPackages, createPackage, updatePackage, assignPackageToSystem, unassignPackageFromSystem, ApiGamepassPackage } from "./api/gamepass";
 import { listSystemTypes, updateSystemTypeRate, createSystemType } from "./api/systemTypes";
 import { updateStore, getStoreProfile } from "./api/stores";
 import { ApiCustomer, ApiGame, ApiCampaign, ApiSystemType } from "./api/types";
+import GamepassView from "./components/GamepassView";
 
 import {
   PC,
@@ -93,6 +95,7 @@ function Dashboard() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [games, setGames] = useState<ApiGame[]>([]);
   const [campaigns, setCampaigns] = useState<ApiCampaign[]>([]);
+  const [packages, setPackages] = useState<ApiGamepassPackage[]>([]);
   const [systemTypes, setSystemTypes] = useState<ApiSystemType[]>([]);
   // Leaderboard has no backend concept at all (confirmed against the real
   // API) — left as local mock data rather than inventing a feature nobody
@@ -237,6 +240,16 @@ function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  const refreshPackages = useCallback(async () => {
+    if (!storeId) return;
+    try {
+      setPackages(await listPackages(storeId));
+    } catch (err) {
+      addLog("System", `Failed to load gamepasses: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
   // Real store name/currency — previously the sidebar/header always showed
   // the mock default until someone manually saved Settings once. Fetches
   // the actual store profile on load so branding matches what was entered
@@ -257,6 +270,7 @@ function Dashboard() {
     refreshCustomers();
     refreshGames();
     refreshCampaigns();
+    refreshPackages();
     refreshSystemTypes();
     refreshStoreProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -620,6 +634,38 @@ function Dashboard() {
     addLog("System", `High score logged for ${entry.playerName} in "${entry.gameTitle}" [Value: ${entry.statValue}]`, "success");
   };
 
+  const handleAddPackage = async (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => {
+    if (!storeId) return;
+    try {
+      await createPackage(storeId, data);
+      addLog("System", `Gamepass created: ${data.name}`, "success");
+      await refreshPackages();
+    } catch (err) {
+      addLog("System", `Failed to create gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleUpdatePackageStatus = async (packageId: string, isActive: boolean) => {
+    if (!storeId) return;
+    try {
+      await updatePackage(storeId, packageId, { isActive });
+      addLog("System", `Gamepass ${isActive ? "restored" : "archived"}.`, isActive ? "info" : "warning");
+      await refreshPackages();
+    } catch (err) {
+      addLog("System", `Failed to update gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleAssignPackageToSystem = async (packageId: string, systemId: string) => {
+    if (!storeId) return;
+    await assignPackageToSystem(storeId, packageId, systemId);
+  };
+
+  const handleUnassignPackageFromSystem = async (packageId: string, systemId: string) => {
+    if (!storeId) return;
+    await unassignPackageFromSystem(storeId, packageId, systemId);
+  };
+
   // HANDLER: Save settings — loungeName goes to the real Store, hourly
   // rates go to their System Types individually (see SettingsView, which now
   // renders one input per real system type instead of 4 fixed fields).
@@ -787,6 +833,18 @@ function Dashboard() {
               onDeleteOffer={handleDeleteOffer}
               onPauseOffer={handlePauseOffer}
               onResumeOffer={handleResumeOffer}
+            />
+          )}
+
+          {activeTab === "gamepass" && (
+            <GamepassView
+              packages={packages}
+              systems={pcs.map(p => ({ id: p.id, name: p.name }))}
+              storeId={storeId ?? ""}
+              onAddPackage={handleAddPackage}
+              onUpdatePackageStatus={handleUpdatePackageStatus}
+              onAssignSystem={handleAssignPackageToSystem}
+              onUnassignSystem={handleUnassignPackageFromSystem}
             />
           )}
 
