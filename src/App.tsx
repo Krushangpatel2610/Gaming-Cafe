@@ -27,7 +27,7 @@ import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
 import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } from "./api/customers";
 import { adjustCredits } from "./api/credits";
-import { listGames, createGame, updateGame, installGame, uninstallGame } from "./api/games";
+import { listGames, createGame, updateGame, installGame, uninstallGame, deleteGame } from "./api/games";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
 import { listPackages, createPackage, updatePackage, assignPackageToSystem, unassignPackageFromSystem, ApiGamepassPackage } from "./api/gamepass";
 import { listSystemTypes, updateSystemTypeRate, createSystemType } from "./api/systemTypes";
@@ -575,6 +575,28 @@ function Dashboard() {
     await uninstallGame(storeId, systemId, gameId);
   };
 
+  const handleUpdateGame = async (gameId: string, data: { name: string, genre?: string, executablePath?: string }) => {
+    if (!storeId) return;
+    try {
+      await updateGame(storeId, gameId, data);
+      addLog("System", `Game updated: ${data.name}`, "success");
+      await refreshGames();
+    } catch (err) {
+      addLog("System", `Failed to update game: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleDeleteGame = async (gameId: string, name: string) => {
+    if (!storeId) return;
+    try {
+      await deleteGame(storeId, gameId);
+      addLog("System", `Game deleted from registry: ${name}`, "warning");
+      await refreshGames();
+    } catch (err) {
+      addLog("System", `Failed to delete game: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
   // HANDLER: Create promotional campaign
   const handleCreateOffer = async (body: Parameters<typeof createCampaign>[1]) => {
     if (!storeId) return;
@@ -634,10 +656,13 @@ function Dashboard() {
     addLog("System", `High score logged for ${entry.playerName} in "${entry.gameTitle}" [Value: ${entry.statValue}]`, "success");
   };
 
-  const handleAddPackage = async (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => {
+  const handleAddPackage = async (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }, systemIds?: string[]) => {
     if (!storeId) return;
     try {
-      await createPackage(storeId, data);
+      const { package: created } = await createPackage(storeId, data);
+      if (systemIds && systemIds.length > 0) {
+        await Promise.all(systemIds.map((sid) => assignPackageToSystem(storeId, created.id, sid)));
+      }
       addLog("System", `Gamepass created: ${data.name}`, "success");
       await refreshPackages();
     } catch (err) {
@@ -650,6 +675,17 @@ function Dashboard() {
     try {
       await updatePackage(storeId, packageId, { isActive });
       addLog("System", `Gamepass ${isActive ? "restored" : "archived"}.`, isActive ? "info" : "warning");
+      await refreshPackages();
+    } catch (err) {
+      addLog("System", `Failed to update gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleUpdatePackage = async (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => {
+    if (!storeId) return;
+    try {
+      await updatePackage(storeId, packageId, data);
+      addLog("System", `Gamepass updated: ${data.name}`, "success");
       await refreshPackages();
     } catch (err) {
       addLog("System", `Failed to update gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
@@ -823,6 +859,8 @@ function Dashboard() {
               onUpdateGameStatus={handleUpdateGameStatus}
               onInstallGame={handleInstallGame}
               onUninstallGame={handleUninstallGame}
+              onUpdateGame={handleUpdateGame}
+              onDeleteGame={handleDeleteGame}
             />
           )}
 
@@ -843,6 +881,7 @@ function Dashboard() {
               storeId={storeId ?? ""}
               onAddPackage={handleAddPackage}
               onUpdatePackageStatus={handleUpdatePackageStatus}
+              onUpdatePackage={handleUpdatePackage}
               onAssignSystem={handleAssignPackageToSystem}
               onUnassignSystem={handleUnassignPackageFromSystem}
             />

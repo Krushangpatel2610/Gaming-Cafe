@@ -10,7 +10,8 @@ import {
   Loader2,
   AlertCircle,
   Clock,
-  Banknote
+  Banknote,
+  Pencil
 } from "lucide-react";
 import { ApiGamepassPackage } from "../api/gamepass";
 import { getPackageSystems } from "../api/gamepass";
@@ -24,8 +25,9 @@ interface GamepassViewProps {
   packages: ApiGamepassPackage[];
   systems: SystemOption[];
   storeId: string;
-  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => void;
+  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }, systemIds?: string[]) => void;
   onUpdatePackageStatus: (packageId: string, isActive: boolean) => void;
+  onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => void;
   onAssignSystem: (packageId: string, systemId: string) => Promise<void>;
   onUnassignSystem: (packageId: string, systemId: string) => Promise<void>;
 }
@@ -36,6 +38,7 @@ export default function GamepassView({
   storeId,
   onAddPackage,
   onUpdatePackageStatus,
+  onUpdatePackage,
   onAssignSystem,
   onUnassignSystem,
 }: GamepassViewProps) {
@@ -45,6 +48,15 @@ export default function GamepassView({
   const [newDuration, setNewDuration] = useState<number>(60);
   const [newPrice, setNewPrice] = useState<number>(0);
   const [newValidityDays, setNewValidityDays] = useState<number>(7);
+  const [newSystemIds, setNewSystemIds] = useState<Set<string>>(new Set());
+
+  // Edit modal state
+  const [editPackage, setEditPackage] = useState<ApiGamepassPackage | null>(null);
+  const [editName, setEditName] = useState<string>("");
+  const [editDescription, setEditDescription] = useState<string>("");
+  const [editDuration, setEditDuration] = useState<number>(60);
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [editValidityDays, setEditValidityDays] = useState<number>(7);
 
   // Station assignment modal state
   const [assignPackage, setAssignPackage] = useState<ApiGamepassPackage | null>(null);
@@ -61,13 +73,48 @@ export default function GamepassView({
       durationMinutes: newDuration,
       price: newPrice,
       validityDays: newValidityDays
-    });
+    }, newSystemIds.size > 0 ? Array.from(newSystemIds) : undefined);
     setShowAddModal(false);
     setNewName("");
     setNewDescription("");
     setNewDuration(60);
     setNewPrice(0);
     setNewValidityDays(7);
+    setNewSystemIds(new Set());
+  };
+
+  const toggleNewSystemId = (systemId: string) => {
+    setNewSystemIds(prev => {
+      const n = new Set(prev);
+      if (n.has(systemId)) n.delete(systemId); else n.add(systemId);
+      return n;
+    });
+  };
+
+  const openEditModal = (pkg: ApiGamepassPackage) => {
+    setEditPackage(pkg);
+    setEditName(pkg.name);
+    setEditDescription(pkg.description || "");
+    setEditDuration(pkg.durationMinutes);
+    setEditPrice(parseFloat(pkg.price));
+    setEditValidityDays(pkg.validityDays);
+  };
+
+  const closeEditModal = () => {
+    setEditPackage(null);
+  };
+
+  const handleEditPackageSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editPackage) return;
+    onUpdatePackage(editPackage.id, {
+      name: editName,
+      description: editDescription || undefined,
+      durationMinutes: editDuration,
+      price: editPrice,
+      validityDays: editValidityDays,
+    });
+    closeEditModal();
   };
 
   const openAssignModal = useCallback(async (pkg: ApiGamepassPackage) => {
@@ -191,17 +238,26 @@ export default function GamepassView({
                   <span>Manage Stations</span>
                 </button>
 
-                <button
-                  onClick={() => onUpdatePackageStatus(pkg.id, !pkg.isActive)}
-                  className={`w-full py-1.5 rounded-lg font-bold transition-all flex items-center justify-center space-x-1 text-xs border ${
-                    pkg.isActive
-                      ? "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600"
-                      : "bg-blue-600 hover:bg-blue-500 border-blue-600 text-white"
-                  }`}
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>{pkg.isActive ? "Archive Package" : "Restore Package"}</span>
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEditModal(pkg)}
+                    className="flex-1 py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center space-x-1.5 text-xs border bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => onUpdatePackageStatus(pkg.id, !pkg.isActive)}
+                    className={`flex-1 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center space-x-1 text-xs border ${
+                      pkg.isActive
+                        ? "bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-600"
+                        : "bg-blue-600 hover:bg-blue-500 border-blue-600 text-white"
+                    }`}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>{pkg.isActive ? "Archive" : "Restore"}</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -281,6 +337,32 @@ export default function GamepassView({
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Available on Specific PCs (optional)</label>
+                <p className="text-[10px] text-slate-400 mb-1">Leave all unchecked to make this pass available on every station.</p>
+                <div className="max-h-32 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-2 bg-slate-50">
+                  {systems.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 text-center py-2">No stations registered yet.</p>
+                  ) : (
+                    systems.map((sys) => (
+                      <label
+                        key={sys.id}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-white select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={newSystemIds.has(sys.id)}
+                          onChange={() => toggleNewSystemId(sys.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <Monitor className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs font-medium text-slate-700 truncate">{sys.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -294,6 +376,94 @@ export default function GamepassView({
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-blue-500/10"
                 >
                   Create Gamepass
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Gamepass */}
+      {editPackage && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden"
+          >
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-900 font-display">Edit Gamepass</h3>
+              <p className="text-xs text-slate-400 mt-1">Station assignments are managed separately via "Manage Stations".</p>
+            </div>
+            <form onSubmit={handleEditPackageSubmit} className="p-6 space-y-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Package Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Description (optional)</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={editDuration}
+                    onChange={(e) => setEditDuration(parseInt(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Price ($)</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step="0.01"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(parseFloat(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Validity (Days)</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={editValidityDays}
+                  onChange={(e) => setEditValidityDays(parseInt(e.target.value))}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                />
+              </div>
+              <div className="flex space-x-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-blue-500/10"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
