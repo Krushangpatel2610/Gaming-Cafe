@@ -524,10 +524,10 @@ function Dashboard() {
   };
 
   // HANDLER: Add game to master catalog
-  const handleAddGame = async (name: string, genre?: string) => {
+  const handleAddGame = async (name: string, genre?: string, executablePath?: string) => {
     if (!storeId) return;
     try {
-      await createGame(storeId, { name, genre });
+      await createGame(storeId, { name, genre, executablePath });
       addLog("System", `Game added to registry: ${name}`, "success");
       await refreshGames();
     } catch (err) {

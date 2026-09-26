@@ -25,7 +25,7 @@ interface GameLibraryViewProps {
   games: ApiGame[];
   systems: SystemOption[];
   storeId: string;
-  onAddGame: (name: string, genre?: string) => void;
+  onAddGame: (name: string, genre?: string, executablePath?: string) => void;
   onUpdateGameStatus: (gameId: string, isActive: boolean) => void;
   onInstallGame: (gameId: string, systemId: string) => Promise<void>;
   onUninstallGame: (gameId: string, systemId: string) => Promise<void>;
@@ -45,6 +45,7 @@ export default function GameLibraryView({
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
   const [newGenre, setNewGenre] = useState<string>("");
+  const [newExecutablePath, setNewExecutablePath] = useState<string>("");
 
   // Station assignment modal state
   const [assignGame, setAssignGame] = useState<ApiGame | null>(null);
@@ -63,10 +64,11 @@ export default function GameLibraryView({
 
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddGame(newName, newGenre || undefined);
+    onAddGame(newName, newGenre || undefined, newExecutablePath || undefined);
     setShowAddModal(false);
     setNewName("");
     setNewGenre("");
+    setNewExecutablePath("");
   };
 
   const openAssignModal = useCallback(async (game: ApiGame) => {
@@ -252,6 +254,17 @@ export default function GameLibraryView({
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
                   placeholder="e.g. Action RPG"
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Executable Path (optional)</label>
+                <input
+                  type="text"
+                  value={newExecutablePath}
+                  onChange={(e) => setNewExecutablePath(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
+                  placeholder="C:\Games\EldenRing\eldenring.exe or steam://rungameid/..."
+                />
+                <p className="text-[10px] text-slate-400">Path must be identical across every station this game is assigned to — leave blank to rely on automatic detection instead.</p>
               </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
