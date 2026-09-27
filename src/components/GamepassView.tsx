@@ -1,5 +1,5 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion } from "motion/react";
 import {
   Plus,
@@ -12,10 +12,18 @@ import {
   AlertCircle,
   Clock,
   Banknote,
-  Pencil
+  Pencil,
+  Check
 } from "lucide-react";
-import { ApiGamepassPackage } from "../api/gamepass";
-import { getPackageSystems } from "../api/gamepass";
+import {
+  ApiGamepassPackage,
+  ApiGamepassPurchase,
+  getPackageSystems,
+  listPendingPurchases,
+  confirmPurchase,
+  rejectPurchase
+} from "../api/gamepass";
+import { ApiCustomer } from "../api/types";
 
 interface SystemOption {
   id: string;
@@ -26,22 +34,28 @@ interface GamepassViewProps {
   currency: string;
   packages: ApiGamepassPackage[];
   systems: SystemOption[];
+  customers?: ApiCustomer[];
   storeId: string;
   onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }, systemIds?: string[]) => void;
   onUpdatePackageStatus: (packageId: string, isActive: boolean) => void;
   onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => void;
   onAssignSystem: (packageId: string, systemId: string) => Promise<void>;
   onUnassignSystem: (packageId: string, systemId: string) => Promise<void>;
+  onNotify?: (message: string, type: "success" | "danger" | "info" | "warning") => void;
 }
 
-export default function GamepassView({ currency, packages,
+export default function GamepassView({
+  currency,
+  packages,
   systems,
+  customers,
   storeId,
   onAddPackage,
   onUpdatePackageStatus,
   onUpdatePackage,
   onAssignSystem,
   onUnassignSystem,
+  onNotify,
 }: GamepassViewProps) {
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
@@ -65,6 +79,13 @@ export default function GamepassView({ currency, packages,
   const [loadingAssign, setLoadingAssign] = useState<boolean>(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+
+  // Pending purchase requests state
+  const [pendingPurchases, setPendingPurchases] = useState<ApiGamepassPurchase[]>([]);
+  const [loadingPurchases, setLoadingPurchases] = useState<boolean>(false);
+  const [processingPurchaseId, setProcessingPurchaseId] = useState<string | null>(null);
+  const [rejectPurchaseTarget, setRejectPurchaseTarget] = useState<ApiGamepassPurchase | null>(null);
+  const [rejectPurchaseReason, setRejectPurchaseReason] = useState<string>("");
 
   const handleAddPackageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +180,63 @@ export default function GamepassView({ currency, packages,
     }
   };
 
+  const refreshPendingPurchases = useCallback(async () => {
+    if (!storeId) return;
+    setLoadingPurchases(true);
+    try {
+      const res = await listPendingPurchases(storeId, { status: "pending", limit: 50 });
+      setPendingPurchases(res.data);
+    } catch (err) {
+      console.error("Failed to load pending gamepass purchases:", err);
+    } finally {
+      setLoadingPurchases(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    refreshPendingPurchases();
+  }, [refreshPendingPurchases]);
+
+  const handleConfirmPurchase = async (purchase: ApiGamepassPurchase) => {
+    if (!storeId) return;
+    setProcessingPurchaseId(purchase.id);
+    try {
+      await confirmPurchase(storeId, purchase.id);
+      const pkgName = purchase.package?.name || packages.find(p => p.id === purchase.packageId)?.name || "Gamepass";
+      if (onNotify) {
+        onNotify(`Confirmed ${pkgName} purchase — pass activated.`, "success");
+      }
+      await refreshPendingPurchases();
+    } catch (err) {
+      if (onNotify) {
+        onNotify(`Failed to confirm purchase: ${err instanceof Error ? err.message : "unknown error"}`, "danger");
+      }
+    } finally {
+      setProcessingPurchaseId(null);
+    }
+  };
+
+  const handleRejectPurchaseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeId || !rejectPurchaseTarget) return;
+    setProcessingPurchaseId(rejectPurchaseTarget.id);
+    try {
+      await rejectPurchase(storeId, rejectPurchaseTarget.id, rejectPurchaseReason);
+      if (onNotify) {
+        onNotify("Gamepass purchase request rejected.", "info");
+      }
+      setRejectPurchaseTarget(null);
+      setRejectPurchaseReason("");
+      await refreshPendingPurchases();
+    } catch (err) {
+      if (onNotify) {
+        onNotify(`Failed to reject purchase: ${err instanceof Error ? err.message : "unknown error"}`, "danger");
+      }
+    } finally {
+      setProcessingPurchaseId(null);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -182,6 +260,77 @@ export default function GamepassView({ currency, packages,
           <span>New Gamepass</span>
         </button>
       </div>
+
+      {/* Pending Gamepass Purchase Requests */}
+      {pendingPurchases.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-bold text-amber-900">
+                Pending Gamepass Requests ({pendingPurchases.length})
+              </h3>
+            </div>
+            <button
+              onClick={refreshPendingPurchases}
+              disabled={loadingPurchases}
+              className="p-1 hover:bg-amber-100 rounded text-amber-700 transition-colors"
+              title="Refresh requests"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingPurchases ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {pendingPurchases.map((purchase) => {
+              const cust = customers?.find((c) => c.userId === purchase.userId);
+              const pkg = purchase.package || packages.find((p) => p.id === purchase.packageId);
+              const priceNum = pkg ? parseFloat(pkg.price) : 0;
+              return (
+                <div key={purchase.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800 text-sm">{pkg?.name || "Gamepass Package"}</span>
+                      {pkg && (
+                        <span className="font-mono font-bold text-indigo-600 text-xs bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
+                          {formatCurrency(priceNum, currency)}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-500">
+                        {cust?.name || cust?.phone || purchase.userId.slice(0, 8)}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      Requested: {new Date(purchase.createdAt).toLocaleString()} · Duration: {pkg?.durationMinutes ? `${Math.floor(pkg.durationMinutes / 60)}h ${pkg.durationMinutes % 60 ? `${pkg.durationMinutes % 60}m` : ''}` : 'Custom'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleConfirmPurchase(purchase)}
+                      disabled={processingPurchaseId === purchase.id}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
+                    >
+                      {processingPurchaseId === purchase.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Confirm</span>
+                    </button>
+                    <button
+                      onClick={() => setRejectPurchaseTarget(purchase)}
+                      disabled={processingPurchaseId === purchase.id}
+                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Gamepass Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -556,6 +705,53 @@ export default function GamepassView({ currency, packages,
                 Done
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Reject Gamepass Purchase */}
+      {rejectPurchaseTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900 font-display">Reject Gamepass Request</h3>
+              <p className="text-xs text-slate-400 mt-1">Please provide a reason for rejecting this purchase.</p>
+            </div>
+            <form onSubmit={handleRejectPurchaseSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Reason</label>
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  value={rejectPurchaseReason}
+                  onChange={(e) => setRejectPurchaseReason(e.target.value)}
+                  placeholder="e.g. Payment not verified on UPI app"
+                  className="w-full mt-1 px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/20 bg-slate-50"
+                />
+              </div>
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setRejectPurchaseTarget(null); setRejectPurchaseReason(""); }}
+                  className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingPurchaseId === rejectPurchaseTarget.id}
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-red-500/10 flex items-center justify-center gap-1"
+                >
+                  {processingPurchaseId === rejectPurchaseTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Reject</span>
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

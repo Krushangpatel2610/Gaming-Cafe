@@ -962,6 +962,8 @@ function Dashboard() {
               packages={packages}
               systems={pcs.map(p => ({ id: p.id, name: p.name }))}
               storeId={storeId ?? ""}
+              customers={customers}
+              onNotify={notify}
               onAddPackage={handleAddPackage}
               onUpdatePackageStatus={handleUpdatePackageStatus}
               onUpdatePackage={handleUpdatePackage}
