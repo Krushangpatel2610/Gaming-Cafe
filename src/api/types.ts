@@ -147,6 +147,17 @@ export interface ApiGame {
   updatedAt?: string;
 }
 
+export interface ApiApp {
+  id: string;
+  name: string;
+  category: string;
+  executablePath: string;
+  launchArgs?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type ApiCampaignType =
   | "percentage_off"
   | "fixed_off"

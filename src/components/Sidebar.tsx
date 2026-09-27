@@ -5,6 +5,7 @@ import {
   Clock,
   Users,
   Gamepad2,
+  AppWindow,
   Tag,
   Ticket,
   Trophy,
@@ -40,6 +41,7 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
     { id: "customers", label: "Customers", icon: Users },
     { id: "gamepass", label: "Gamepass", icon: Ticket },
     { id: "games", label: "Game Library", icon: Gamepad2 },
+    { id: "apps", label: "App Library", icon: AppWindow },
     { id: "offers", label: "Offers & Promos", icon: Tag },
     { id: "leaderboard", label: "Leaderboard", icon: Trophy },
   ];

@@ -6,6 +6,7 @@ import LivePCsView from "./components/LivePCsView";
 import SessionsView from "./components/SessionsView";
 import CustomersView from "./components/CustomersView";
 import GameLibraryView from "./components/GameLibraryView";
+import AppLibraryView from "./components/AppLibraryView";
 import OffersView from "./components/OffersView";
 import LeaderboardsView from "./components/LeaderboardsView";
 import SettingsView from "./components/SettingsView";
@@ -28,11 +29,12 @@ import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/ad
 import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } from "./api/customers";
 import { adjustCredits } from "./api/credits";
 import { listGames, createGame, updateGame, installGame, uninstallGame, deleteGame } from "./api/games";
+import { listApps, createApp, updateApp, installApp, uninstallApp, deleteApp } from "./api/apps";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
 import { listPackages, createPackage, updatePackage, assignPackageToSystem, unassignPackageFromSystem, ApiGamepassPackage } from "./api/gamepass";
 import { listSystemTypes, updateSystemTypeRate, createSystemType } from "./api/systemTypes";
 import { updateStore, getStoreProfile } from "./api/stores";
-import { ApiCustomer, ApiGame, ApiCampaign, ApiSystemType } from "./api/types";
+import { ApiCustomer, ApiGame, ApiApp, ApiCampaign, ApiSystemType } from "./api/types";
 import GamepassView from "./components/GamepassView";
 
 import {
@@ -94,6 +96,7 @@ function Dashboard() {
   const [customers, setCustomers] = useState<ApiCustomer[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [games, setGames] = useState<ApiGame[]>([]);
+  const [apps, setApps] = useState<ApiApp[]>([]);
   const [campaigns, setCampaigns] = useState<ApiCampaign[]>([]);
   const [packages, setPackages] = useState<ApiGamepassPackage[]>([]);
   const [systemTypes, setSystemTypes] = useState<ApiSystemType[]>([]);
@@ -219,6 +222,16 @@ function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  const refreshApps = useCallback(async () => {
+    if (!storeId) return;
+    try {
+      setApps(await listApps(storeId));
+    } catch (err) {
+      addLog("System", `Failed to load apps: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
   const refreshCampaigns = useCallback(async () => {
     if (!storeId) return;
     try {
@@ -269,6 +282,7 @@ function Dashboard() {
     if (!storeId) return;
     refreshCustomers();
     refreshGames();
+    refreshApps();
     refreshCampaigns();
     refreshPackages();
     refreshSystemTypes();
@@ -597,6 +611,61 @@ function Dashboard() {
     }
   };
 
+  // HANDLER: Add app to master catalog
+  const handleAddApp = async (name: string, category: string, executablePath: string, launchArgs?: string) => {
+    if (!storeId) return;
+    try {
+      await createApp(storeId, { name, category, executablePath, launchArgs });
+      addLog("System", `App added to registry: ${name}`, "success");
+      await refreshApps();
+    } catch (err) {
+      addLog("System", `Failed to add app: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleUpdateAppStatus = async (appId: string, isActive: boolean) => {
+    if (!storeId) return;
+    try {
+      await updateApp(storeId, appId, { isActive });
+      addLog("System", `App ${isActive ? "restored" : "taken offline"}.`, isActive ? "info" : "warning");
+      await refreshApps();
+    } catch (err) {
+      addLog("System", `Failed to update app: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleInstallApp = async (appId: string, systemId: string) => {
+    if (!storeId) return;
+    await installApp(storeId, systemId, appId);
+  };
+
+  const handleUninstallApp = async (appId: string, systemId: string) => {
+    if (!storeId) return;
+    await uninstallApp(storeId, systemId, appId);
+  };
+
+  const handleUpdateApp = async (appId: string, data: { name?: string; category?: string; executablePath?: string; launchArgs?: string }) => {
+    if (!storeId) return;
+    try {
+      await updateApp(storeId, appId, data);
+      addLog("System", `App updated: ${data.name || "App"}`, "success");
+      await refreshApps();
+    } catch (err) {
+      addLog("System", `Failed to update app: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const handleDeleteApp = async (appId: string, name: string) => {
+    if (!storeId) return;
+    try {
+      await deleteApp(storeId, appId);
+      addLog("System", `App deleted from registry: ${name}`, "warning");
+      await refreshApps();
+    } catch (err) {
+      addLog("System", `Failed to delete app: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
   // HANDLER: Create promotional campaign
   const handleCreateOffer = async (body: Parameters<typeof createCampaign>[1]) => {
     if (!storeId) return;
@@ -861,6 +930,20 @@ function Dashboard() {
               onUninstallGame={handleUninstallGame}
               onUpdateGame={handleUpdateGame}
               onDeleteGame={handleDeleteGame}
+            />
+          )}
+
+          {activeTab === "apps" && (
+            <AppLibraryView
+              apps={apps}
+              systems={pcs.map(p => ({ id: p.id, name: p.name }))}
+              storeId={storeId ?? ""}
+              onAddApp={handleAddApp}
+              onUpdateAppStatus={handleUpdateAppStatus}
+              onInstallApp={handleInstallApp}
+              onUninstallApp={handleUninstallApp}
+              onUpdateApp={handleUpdateApp}
+              onDeleteApp={handleDeleteApp}
             />
           )}
 
