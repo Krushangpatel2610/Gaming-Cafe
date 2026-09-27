@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
@@ -30,6 +31,7 @@ import { useAuth } from "../context/AuthContext";
 import { CreateSystemBody, UpdateSystemBody } from "../api/systems";
 
 interface LivePCsViewProps {
+  currency: string;
   pcs: PC[];
   customers: ApiCustomer[];
   systemTypes: ApiSystemType[];
@@ -48,8 +50,7 @@ interface LivePCsViewProps {
 
 const PLATFORMS: ApiSystemPlatform[] = ["pc", "ps5", "ps4", "xbox", "vr", "other"];
 
-export default function LivePCsView({
-  pcs,
+export default function LivePCsView({ currency, pcs,
   customers,
   systemTypes,
   getHourlyRateForPC,
@@ -398,7 +399,7 @@ export default function LivePCsView({
                         <Clock className="w-3 h-3 text-indigo-600" />
                         <span>{formatRemaining(pc.timeRemaining)}</span>
                       </div>
-                      <span className="font-bold">₹{rate.toFixed(2)}/hr</span>
+                      <span className="font-bold">{formatCurrency(rate.toFixed(2), currency)}/hr</span>
                     </div>
                   </div>
                 ) : (
@@ -651,7 +652,7 @@ export default function LivePCsView({
                     <option value="">-- Select Member --</option>
                     {customers.filter(c => !c.isSuspended).map(cust => (
                       <option key={cust.userId} value={cust.userId}>
-                        {cust.name || cust.phone || cust.userId.slice(0, 8)} (Balance: ₹{parseFloat(cust.creditsBalance).toFixed(2)})
+                        {cust.name || cust.phone || cust.userId.slice(0, 8)} (Balance: {formatCurrency(parseFloat(cust.creditsBalance).toFixed(2), currency)})
                       </option>
                     ))}
                   </select>
@@ -697,12 +698,12 @@ export default function LivePCsView({
                 <div className="space-y-0.5">
                   <span className="text-indigo-800 font-semibold block">Estimated session cost:</span>
                   <span className="text-[10px] text-indigo-600 font-mono">
-                    {isGuest ? 120 : duration} mins @ ₹{startRate.toFixed(2)}/hr
+                    {isGuest ? 120 : duration} mins @ {formatCurrency(startRate.toFixed(2), currency)}/hr
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-lg font-bold text-indigo-900 font-mono">
-                    ₹{(((isGuest ? 120 : duration) / 60) * startRate).toFixed(2)}
+                    {formatCurrency((((isGuest ? 120 : duration) / 60) * startRate).toFixed(2), currency)}
                   </span>
                 </div>
               </div>
@@ -767,12 +768,12 @@ export default function LivePCsView({
                 <div className="space-y-0.5">
                   <span className="text-indigo-800 font-semibold block">Incremental charge:</span>
                   <span className="text-[10px] text-indigo-600 font-mono">
-                    +{additionalMinutes} mins @ ₹{extendRate.toFixed(2)}/hr
+                    +{additionalMinutes} mins @ {formatCurrency(extendRate.toFixed(2), currency)}/hr
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-base font-bold text-indigo-900 font-mono">
-                    ₹{((additionalMinutes / 60) * extendRate).toFixed(2)}
+                    {formatCurrency(((additionalMinutes / 60) * extendRate).toFixed(2), currency)}
                   </span>
                 </div>
               </div>
@@ -837,7 +838,7 @@ export default function LivePCsView({
                 >
                   <option value="">-- None (no rate assigned) --</option>
                   {systemTypes.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} — ₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr</option>
+                    <option key={t.id} value={t.id}>{t.name} — {formatCurrency(parseFloat(t.hourlyBaseRate).toFixed(2), currency)}/hr</option>
                   ))}
                   <option value={CUSTOM_RATE_VALUE}>Custom (enter rate)...</option>
                 </select>
@@ -948,7 +949,7 @@ export default function LivePCsView({
                 >
                   <option value="">-- None (no rate assigned yet) --</option>
                   {systemTypes.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} — ₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr</option>
+                    <option key={t.id} value={t.id}>{t.name} — {formatCurrency(parseFloat(t.hourlyBaseRate).toFixed(2), currency)}/hr</option>
                   ))}
                   <option value={CUSTOM_RATE_VALUE}>Custom (enter rate)...</option>
                 </select>

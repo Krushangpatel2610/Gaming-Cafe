@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { Send, Users, CheckSquare, Square } from "lucide-react";
@@ -7,13 +8,14 @@ import { sendNotification } from "../api/notifications";
 import { ApiCustomer, ApiNotificationChannel } from "../api/types";
 
 interface NotificationsViewProps {
+  currency: string;
   customers: ApiCustomer[];
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
 
 const CHANNELS: ApiNotificationChannel[] = ["in_app", "email", "push", "sms"];
 
-export default function NotificationsView({ customers, onNotify }: NotificationsViewProps) {
+export default function NotificationsView({ currency, customers, onNotify }: NotificationsViewProps) {
   const { storeId, admin } = useAuth();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [channel, setChannel] = useState<ApiNotificationChannel>("in_app");

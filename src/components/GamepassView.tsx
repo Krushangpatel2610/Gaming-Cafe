@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
@@ -22,6 +23,7 @@ interface SystemOption {
 }
 
 interface GamepassViewProps {
+  currency: string;
   packages: ApiGamepassPackage[];
   systems: SystemOption[];
   storeId: string;
@@ -32,8 +34,7 @@ interface GamepassViewProps {
   onUnassignSystem: (packageId: string, systemId: string) => Promise<void>;
 }
 
-export default function GamepassView({
-  packages,
+export default function GamepassView({ currency, packages,
   systems,
   storeId,
   onAddPackage,
@@ -214,7 +215,7 @@ export default function GamepassView({
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-500 font-medium flex items-center gap-1.5"><Banknote className="w-3.5 h-3.5"/> Price</span>
-                    <span className="font-bold text-slate-700">${pkg.price}</span>
+                    <span className="font-bold text-slate-700">{formatCurrency(pkg.price, currency)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
                     <span>Valid for {pkg.validityDays} days</span>
@@ -312,7 +313,7 @@ export default function GamepassView({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Price ($)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Price ({currencySymbol(currency)})</label>
                   <input
                     type="number"
                     required
@@ -428,7 +429,7 @@ export default function GamepassView({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Price ($)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Price ({currencySymbol(currency)})</label>
                   <input
                     type="number"
                     required

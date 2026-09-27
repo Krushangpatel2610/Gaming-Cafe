@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { TrendingUp, Users, Activity, Monitor, CalendarRange } from "lucide-react";
@@ -19,6 +20,7 @@ import {
 } from "../api/types";
 
 interface AnalyticsViewProps {
+  currency: string;
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
 
@@ -27,7 +29,7 @@ function toDateInputValue(d: Date): string {
   return new Date(d.getTime() - tz).toISOString().slice(0, 10);
 }
 
-export default function AnalyticsView({ onNotify }: AnalyticsViewProps) {
+export default function AnalyticsView({ currency, onNotify }: AnalyticsViewProps) {
   const { storeId } = useAuth();
   const [dateFrom, setDateFrom] = useState<string>(toDateInputValue(new Date(Date.now() - 6 * 86400000)));
   const [dateTo, setDateTo] = useState<string>(toDateInputValue(new Date()));
@@ -128,7 +130,7 @@ export default function AnalyticsView({ onNotify }: AnalyticsViewProps) {
           <div className="flex items-end gap-2 h-48">
             {revenue.map((r) => (
               <div key={r.date} className="flex-1 flex flex-col items-center justify-end gap-1.5 group relative">
-                <span className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">₹{parseFloat(r.netRevenue).toFixed(0)}</span>
+                <span className="text-[9px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">{formatCurrency(parseFloat(r.netRevenue).toFixed(0), currency)}</span>
                 <div
                   className="w-full bg-indigo-500 rounded-t-md hover:bg-indigo-600 transition-colors"
                   style={{ height: `${Math.max((parseFloat(r.revenue) / maxRevenue) * 160, 3)}px` }}
@@ -197,7 +199,7 @@ export default function AnalyticsView({ onNotify }: AnalyticsViewProps) {
                   <td className="px-4 py-3 uppercase text-slate-500">{s.platform}</td>
                   <td className="px-4 py-3 text-slate-600">{s.totalSessions}</td>
                   <td className="px-4 py-3 text-slate-600">{s.totalMinutes}m</td>
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900">₹{parseFloat(s.totalRevenue).toFixed(2)}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(s.totalRevenue).toFixed(2), currency)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">

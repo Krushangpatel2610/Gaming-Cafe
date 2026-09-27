@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { Receipt, TrendingUp, FileText, X, ShieldAlert, ReceiptText } from "lucide-react";
@@ -8,11 +9,12 @@ import { ApiBillingEntry, ApiBillingOverride, ApiBillingRevenueSummary } from ".
 import { Session } from "../types";
 
 interface BillingViewProps {
+  currency: string;
   sessions: Session[];
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
 
-export default function BillingView({ sessions, onNotify }: BillingViewProps) {
+export default function BillingView({ currency, sessions, onNotify }: BillingViewProps) {
   const { storeId, admin } = useAuth();
   const [ledger, setLedger] = useState<ApiBillingEntry[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -152,15 +154,15 @@ export default function BillingView({ sessions, onNotify }: BillingViewProps) {
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><TrendingUp className="w-3.5 h-3.5" />Gross Revenue</div>
-          <p className="text-xl font-bold text-slate-900 font-mono">₹{totals ? totals.gross.toFixed(2) : "0.00"}</p>
+          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(totals ? totals.gross.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><Receipt className="w-3.5 h-3.5" />Discounts</div>
-          <p className="text-xl font-bold text-slate-900 font-mono">₹{totals ? totals.discounts.toFixed(2) : "0.00"}</p>
+          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(totals ? totals.discounts.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><FileText className="w-3.5 h-3.5" />Net Revenue</div>
-          <p className="text-xl font-bold text-emerald-700 font-mono">₹{totals ? totals.net.toFixed(2) : "0.00"}</p>
+          <p className="text-xl font-bold text-emerald-700 font-mono">{formatCurrency(totals ? totals.net.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><Receipt className="w-3.5 h-3.5" />Billed Records</div>
@@ -192,9 +194,9 @@ export default function BillingView({ sessions, onNotify }: BillingViewProps) {
                   <td className="px-4 py-3 font-mono text-slate-500">{new Date(b.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3 font-mono text-slate-400">{b.sessionId.slice(0, 8)}</td>
                   <td className="px-4 py-3 text-slate-600">{b.billedMinutes}m</td>
-                  <td className="px-4 py-3 font-mono text-slate-600">₹{parseFloat(b.grossAmount).toFixed(2)}</td>
-                  <td className="px-4 py-3 font-mono text-slate-400">₹{parseFloat(b.discountAmount).toFixed(2)}</td>
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900">₹{parseFloat(b.netAmount).toFixed(2)}</td>
+                  <td className="px-4 py-3 font-mono text-slate-600">{formatCurrency(parseFloat(b.grossAmount).toFixed(2), currency)}</td>
+                  <td className="px-4 py-3 font-mono text-slate-400">{formatCurrency(parseFloat(b.discountAmount).toFixed(2), currency)}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(b.netAmount).toFixed(2), currency)}</td>
                   <td className="px-4 py-3 text-slate-500">{b.billingReason}</td>
                   <td className="px-4 py-3 text-right"><span className="text-indigo-600 font-semibold">View</span></td>
                 </tr>
@@ -226,11 +228,11 @@ export default function BillingView({ sessions, onNotify }: BillingViewProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div><span className="text-slate-400 block">Billed window</span><span className="font-mono text-slate-700">{new Date(selected.billing.billedFrom).toLocaleTimeString()} – {new Date(selected.billing.billedUntil).toLocaleTimeString()}</span></div>
                 <div><span className="text-slate-400 block">Minutes</span><span className="font-semibold text-slate-700">{selected.billing.billedMinutes}m</span></div>
-                <div><span className="text-slate-400 block">Base rate</span><span className="font-mono text-slate-700">₹{parseFloat(selected.billing.baseRate).toFixed(2)}/hr</span></div>
+                <div><span className="text-slate-400 block">Base rate</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.baseRate).toFixed(2), currency)}/hr</span></div>
                 <div><span className="text-slate-400 block">Multiplier</span><span className="font-mono text-slate-700">×{selected.billing.appliedMultiplier}</span></div>
-                <div><span className="text-slate-400 block">Gross</span><span className="font-mono text-slate-700">₹{parseFloat(selected.billing.grossAmount).toFixed(2)}</span></div>
-                <div><span className="text-slate-400 block">Discount</span><span className="font-mono text-slate-700">₹{parseFloat(selected.billing.discountAmount).toFixed(2)}</span></div>
-                <div className="col-span-2 pt-1 border-t border-slate-100"><span className="text-slate-400 block">Net Amount</span><span className="font-mono text-lg font-bold text-slate-900">₹{parseFloat(selected.billing.netAmount).toFixed(2)}</span></div>
+                <div><span className="text-slate-400 block">Gross</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.grossAmount).toFixed(2), currency)}</span></div>
+                <div><span className="text-slate-400 block">Discount</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.discountAmount).toFixed(2), currency)}</span></div>
+                <div className="col-span-2 pt-1 border-t border-slate-100"><span className="text-slate-400 block">Net Amount</span><span className="font-mono text-lg font-bold text-slate-900">{formatCurrency(parseFloat(selected.billing.netAmount).toFixed(2), currency)}</span></div>
               </div>
 
               {selected.overrides.length > 0 && (

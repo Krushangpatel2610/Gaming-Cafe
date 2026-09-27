@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle } from "lucide-react";
@@ -9,6 +10,7 @@ import { listTopupRequests, confirmTopupRequest, rejectTopupRequest, ApiTopupReq
 import { ApiCustomer, ApiPayment, ApiPaymentMethod, ApiPaymentQr } from "../api/types";
 
 interface PaymentsViewProps {
+  currency: string;
   customers: ApiCustomer[];
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
@@ -22,7 +24,7 @@ const STATUS_BADGE: Record<string, string> = {
   refunded: "bg-slate-100 text-slate-500 border-slate-200",
 };
 
-export default function PaymentsView({ customers, onNotify }: PaymentsViewProps) {
+export default function PaymentsView({ currency, customers, onNotify }: PaymentsViewProps) {
   const { storeId, admin } = useAuth();
   const [qr, setQr] = useState<ApiPaymentQr | null>(null);
   const [payments, setPayments] = useState<ApiPayment[]>([]);
@@ -205,7 +207,7 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
                 <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-mono font-bold text-slate-900 text-sm">₹{parseFloat(req.amount).toFixed(2)}</p>
+                      <p className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(parseFloat(req.amount).toFixed(2), currency)}</p>
                       <span className="text-xs text-slate-500">{cust?.name || cust?.phone || req.userId.slice(0, 8)}</span>
                     </div>
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
@@ -261,7 +263,7 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
                 return (
                   <tr key={p.id} className="hover:bg-slate-50/60">
                     <td className="px-4 py-3 font-mono text-slate-500">{new Date(p.createdAt).toLocaleString()}</td>
-                    <td className="px-4 py-3 font-mono font-bold text-slate-900">₹{parseFloat(p.amount).toFixed(2)}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(p.amount).toFixed(2), currency)}</td>
                     <td className="px-4 py-3 uppercase text-slate-600 font-semibold">{p.method}</td>
                     <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full border font-bold ${STATUS_BADGE[p.status]}`}>{p.status}</span></td>
                     <td className="px-4 py-3 text-slate-600">{cust?.name || (p.userId ? p.userId.slice(0, 8) : "—")}</td>
@@ -325,7 +327,7 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
             </div>
             <form onSubmit={handleRecordSubmit} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Amount (₹)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Amount ({currencySymbol(currency)})</label>
                 <input required type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
               </div>
               <div className="space-y-1">
@@ -366,7 +368,7 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-base font-bold text-slate-900 font-display">Refund Payment</h3>
-              <p className="text-xs text-slate-400 mt-1">₹{parseFloat(refundTarget.amount).toFixed(2)} via {refundTarget.method.toUpperCase()}</p>
+              <p className="text-xs text-slate-400 mt-1">{formatCurrency(parseFloat(refundTarget.amount).toFixed(2), currency)} via {refundTarget.method.toUpperCase()}</p>
             </div>
             <form onSubmit={handleRefundSubmit} className="p-5 space-y-4">
               <div className="space-y-1">
@@ -392,7 +394,7 @@ export default function PaymentsView({ customers, onNotify }: PaymentsViewProps)
           <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-base font-bold text-slate-900 font-display">Reject Top-Up Request</h3>
-              <p className="text-xs text-slate-400 mt-1">₹{parseFloat(rejectTarget.amount).toFixed(2)} request will be marked rejected — no credits granted.</p>
+              <p className="text-xs text-slate-400 mt-1">{formatCurrency(parseFloat(rejectTarget.amount).toFixed(2), currency)} request will be marked rejected — no credits granted.</p>
             </div>
             <form onSubmit={handleRejectSubmit} className="p-5 space-y-4">
               <div className="space-y-1">

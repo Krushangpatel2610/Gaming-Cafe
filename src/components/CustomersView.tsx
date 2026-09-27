@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
@@ -17,14 +18,14 @@ import {
 import { ApiCustomer } from "../api/types";
 
 interface CustomersViewProps {
+  currency: string;
   customers: ApiCustomer[];
   onRegisterCustomer: (name: string, phone?: string) => void;
   onAddBalance: (userId: string, amount: number) => void;
   onToggleStatus: (userId: string, reason?: string) => void;
 }
 
-export default function CustomersView({
-  customers,
+export default function CustomersView({ currency, customers,
   onRegisterCustomer,
   onAddBalance,
   onToggleStatus
@@ -197,11 +198,11 @@ export default function CustomersView({
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                   <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wide block">Balance</span>
-                  <span className="text-xs font-bold font-mono text-slate-800">₹{parseFloat(cust.creditsBalance).toFixed(2)}</span>
+                  <span className="text-xs font-bold font-mono text-slate-800">{formatCurrency(parseFloat(cust.creditsBalance).toFixed(2), currency)}</span>
                 </div>
                 <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                   <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wide block">Spend</span>
-                  <span className="text-xs font-bold font-mono text-slate-800">₹{parseFloat(cust.totalSpend).toFixed(2)}</span>
+                  <span className="text-xs font-bold font-mono text-slate-800">{formatCurrency(parseFloat(cust.totalSpend).toFixed(2), currency)}</span>
                 </div>
                 <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                   <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wide block">Play Time</span>
@@ -322,7 +323,7 @@ export default function CustomersView({
                           : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       }`}
                     >
-                      +₹{amt}
+                      +{formatCurrency(amt, currency)}
                     </button>
                   ))}
                 </div>

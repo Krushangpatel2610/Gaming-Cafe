@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
@@ -13,6 +14,7 @@ import { ApiCampaign, ApiCampaignType } from "../api/types";
 import { CreateCampaignBody } from "../api/campaigns";
 
 interface OffersViewProps {
+  currency: string;
   campaigns: ApiCampaign[];
   onCreateOffer: (body: CreateCampaignBody) => void;
   onDeleteOffer: (id: string) => void;
@@ -29,7 +31,7 @@ const CAMPAIGN_TYPE_LABELS: Record<ApiCampaignType, string> = {
   first_visit: "First-visit offer"
 };
 
-export default function OffersView({ campaigns, onCreateOffer, onDeleteOffer, onPauseOffer, onResumeOffer }: OffersViewProps) {
+export default function OffersView({ currency, campaigns, onCreateOffer, onDeleteOffer, onPauseOffer, onResumeOffer }: OffersViewProps) {
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
 

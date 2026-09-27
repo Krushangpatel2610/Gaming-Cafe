@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React from "react";
 import { motion } from "motion/react";
 import { 
@@ -15,6 +16,7 @@ import { PC, Session, PCStatus } from "../types";
 import { ApiCustomer, ApiGame } from "../api/types";
 
 interface DashboardViewProps {
+  currency: string;
   pcs: PC[];
   customers: ApiCustomer[];
   sessions: Session[];
@@ -24,8 +26,7 @@ interface DashboardViewProps {
   onQuickRegisterCustomer: () => void;
 }
 
-export default function DashboardView({ 
-  pcs, 
+export default function DashboardView({ currency, pcs, 
   customers, 
   sessions, 
   games, 
@@ -287,7 +288,7 @@ export default function DashboardView({
                             </span>
                           </td>
                           <td className="py-3.5 text-right font-bold text-slate-900 font-mono">
-                            ₹{(activeSession?.totalCost ?? 0).toFixed(2)}
+                            {formatCurrency((activeSession?.totalCost ?? 0).toFixed(2), currency)}
                           </td>
                         </tr>
                       );

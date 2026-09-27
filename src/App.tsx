@@ -769,7 +769,7 @@ function Dashboard() {
           )}
 
           {activeTab === "dashboard" && (
-            <DashboardView
+            <DashboardView currency={settings.currency} 
               pcs={pcs}
               customers={customers}
               sessions={sessions}
@@ -781,7 +781,7 @@ function Dashboard() {
           )}
 
           {activeTab === "live_pcs" && (
-            <LivePCsView
+            <LivePCsView currency={settings.currency} 
               pcs={pcs}
               customers={customers}
               systemTypes={systemTypes}
@@ -800,35 +800,35 @@ function Dashboard() {
           )}
 
           {activeTab === "bookings" && (
-            <BookingsView pcs={pcs} customers={customers} onNotify={notify} />
+            <BookingsView currency={settings.currency}  pcs={pcs} customers={customers} onNotify={notify} />
           )}
 
           {activeTab === "billing" && (
-            <BillingView sessions={sessions} onNotify={notify} />
+            <BillingView currency={settings.currency}  sessions={sessions} onNotify={notify} />
           )}
 
           {activeTab === "payments" && (
-            <PaymentsView customers={customers} onNotify={notify} />
+            <PaymentsView currency={settings.currency}  customers={customers} onNotify={notify} />
           )}
 
           {activeTab === "analytics" && (
-            <AnalyticsView onNotify={notify} />
+            <AnalyticsView currency={settings.currency}  onNotify={notify} />
           )}
 
           {activeTab === "disputes" && (
-            <DisputesView customers={customers} onNotify={notify} />
+            <DisputesView currency={settings.currency}  customers={customers} onNotify={notify} />
           )}
 
           {activeTab === "notifications" && (
-            <NotificationsView customers={customers} onNotify={notify} />
+            <NotificationsView currency={settings.currency}  customers={customers} onNotify={notify} />
           )}
 
           {activeTab === "team" && (
-            <TeamView onNotify={notify} />
+            <TeamView currency={settings.currency}  onNotify={notify} />
           )}
 
           {activeTab === "sessions" && (
-            <SessionsView
+            <SessionsView currency={settings.currency} 
               sessions={sessions}
               pcs={pcs}
               customers={customers}
@@ -842,7 +842,7 @@ function Dashboard() {
           )}
 
           {activeTab === "customers" && (
-            <CustomersView
+            <CustomersView currency={settings.currency} 
               customers={customers}
               onRegisterCustomer={handleRegisterCustomer}
               onAddBalance={handleAddBalance}
@@ -851,7 +851,7 @@ function Dashboard() {
           )}
 
           {activeTab === "games" && (
-            <GameLibraryView
+            <GameLibraryView currency={settings.currency} 
               games={games}
               systems={pcs.map(p => ({ id: p.id, name: p.name }))}
               storeId={storeId ?? ""}
@@ -865,7 +865,7 @@ function Dashboard() {
           )}
 
           {activeTab === "offers" && (
-            <OffersView
+            <OffersView currency={settings.currency} 
               campaigns={campaigns}
               onCreateOffer={handleCreateOffer}
               onDeleteOffer={handleDeleteOffer}
@@ -875,7 +875,7 @@ function Dashboard() {
           )}
 
           {activeTab === "gamepass" && (
-            <GamepassView
+            <GamepassView currency={settings.currency} 
               packages={packages}
               systems={pcs.map(p => ({ id: p.id, name: p.name }))}
               storeId={storeId ?? ""}
@@ -888,7 +888,7 @@ function Dashboard() {
           )}
 
           {activeTab === "leaderboard" && (
-            <LeaderboardsView
+            <LeaderboardsView currency={settings.currency} 
               leaderboard={leaderboard}
               customers={customers}
               games={games}
@@ -897,7 +897,7 @@ function Dashboard() {
           )}
 
           {activeTab === "settings" && (
-            <SettingsView
+            <SettingsView 
               settings={settings}
               systemTypes={systemTypes}
               onSaveSettings={handleSaveSettings}

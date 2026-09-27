@@ -100,7 +100,6 @@ export interface LeaderboardEntry {
 export interface SystemSettings {
   loungeName: string;
   currency: string;
-  currencySymbol: string;
   taxRate: number;
   openingTime: string;
   closingTime: string;

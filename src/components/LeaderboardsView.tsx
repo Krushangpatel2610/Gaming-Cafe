@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import { 
@@ -15,13 +16,14 @@ import { LeaderboardEntry } from "../types";
 import { ApiCustomer, ApiGame } from "../api/types";
 
 interface LeaderboardsViewProps {
+  currency: string;
   leaderboard: LeaderboardEntry[];
   customers: ApiCustomer[];
   games: ApiGame[];
   onSubmitScore: (entry: Omit<LeaderboardEntry, "id" | "rank" | "date">) => void;
 }
 
-export default function LeaderboardsView({ leaderboard, customers, games, onSubmitScore }: LeaderboardsViewProps) {
+export default function LeaderboardsView({ currency, leaderboard, customers, games, onSubmitScore }: LeaderboardsViewProps) {
   const [textSearch, setTextSearch] = useState<string>("");
   const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
 

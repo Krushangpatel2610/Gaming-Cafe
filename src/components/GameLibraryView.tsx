@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
@@ -24,6 +25,7 @@ interface SystemOption {
 }
 
 interface GameLibraryViewProps {
+  currency: string;
   games: ApiGame[];
   systems: SystemOption[];
   storeId: string;
@@ -35,8 +37,7 @@ interface GameLibraryViewProps {
   onDeleteGame: (gameId: string, name: string) => void;
 }
 
-export default function GameLibraryView({
-  games,
+export default function GameLibraryView({ currency, games,
   systems,
   storeId,
   onAddGame,

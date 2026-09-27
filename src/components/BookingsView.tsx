@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, X, Timer } from "lucide-react";
@@ -9,6 +10,7 @@ import { createWalkInBooking } from "../api/bookings";
 import { ApiError } from "../api/client";
 
 interface BookingsViewProps {
+  currency: string;
   pcs: PC[];
   customers: ApiCustomer[];
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
@@ -39,7 +41,7 @@ const STATUS_COLORS: Record<string, string> = {
   no_show: "bg-red-100 border-red-300 text-red-700",
 };
 
-export default function BookingsView({ pcs, customers, onNotify }: BookingsViewProps) {
+export default function BookingsView({ currency, pcs, customers, onNotify }: BookingsViewProps) {
   const { storeId } = useAuth();
   const [selectedDate, setSelectedDate] = useState<string>(toDateInputValue(new Date()));
   const [bookings, setBookings] = useState<ApiBooking[]>([]);

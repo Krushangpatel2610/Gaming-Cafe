@@ -228,7 +228,7 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
   };
 
   const [loungeName, setLoungeName] = useState<string>(settings.loungeName);
-  const [currencySymbol, setCurrencySymbol] = useState<string>(settings.currencySymbol);
+  
   const [taxRate, setTaxRate] = useState<number>(settings.taxRate);
   const [openingTime, setOpeningTime] = useState<string>(settings.openingTime);
   const [closingTime, setClosingTime] = useState<string>(settings.closingTime);
@@ -257,10 +257,9 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
 
     onSaveSettings(
       {
-        loungeName,
-        currency: settings.currency,
-        currencySymbol,
-        taxRate,
+          loungeName,
+          currency: settings.currency,
+          taxRate,
         openingTime,
         closingTime,
         allowGuests,
@@ -322,14 +321,18 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Currency Symbol</label>
-                <input
-                  type="text"
-                  required
-                  value={currencySymbol}
-                  onChange={(e) => setCurrencySymbol(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-mono transition-all"
-                />
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Currency</label>
+                <select
+                  value={settings.currency}
+                  onChange={(e) => onSaveSettings({ ...settings, currency: e.target.value }, [])}
+                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 font-sans transition-all"
+                >
+                  <option value="INR">₹ Indian Rupee (INR)</option>
+                  <option value="USD">$ US Dollar (USD)</option>
+                  <option value="EUR">€ Euro (EUR)</option>
+                  <option value="GBP">£ British Pound (GBP)</option>
+                </select>
+                <p className="text-[10px] text-slate-400">Real — saves to the store record.</p>
               </div>
             </div>
           </div>

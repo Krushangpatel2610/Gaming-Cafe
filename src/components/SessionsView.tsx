@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
@@ -14,6 +15,7 @@ import { Session, PC, SystemSettings } from "../types";
 import { ApiCustomer, ApiSystemType } from "../api/types";
 
 interface SessionsViewProps {
+  currency: string;
   sessions: Session[];
   pcs: PC[];
   customers: ApiCustomer[];
@@ -23,8 +25,7 @@ interface SessionsViewProps {
   onStartManualSession: (pcId: string, customerName: string, durationMinutes: number) => void;
 }
 
-export default function SessionsView({
-  sessions,
+export default function SessionsView({ currency, sessions,
   pcs,
   systemTypes,
   settings,
@@ -172,7 +173,7 @@ export default function SessionsView({
                           <div className="font-semibold text-slate-800">{sess.customerName}</div>
                           {sess.customerId && <div className="text-[10px] text-slate-400 font-mono">{sess.customerId.slice(0, 8)}</div>}
                         </td>
-                        <td className="p-4 font-mono text-slate-600">₹{sess.ratePerHour.toFixed(2)}/hr</td>
+                        <td className="p-4 font-mono text-slate-600">{formatCurrency(sess.ratePerHour.toFixed(2), currency)}/hr</td>
                         <td className="p-4 text-slate-500 font-mono">
                           {new Date(sess.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </td>
@@ -187,7 +188,7 @@ export default function SessionsView({
                           </span>
                         </td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">
-                          ₹{sess.totalCost.toFixed(2)}
+                          {formatCurrency(sess.totalCost.toFixed(2), currency)}
                         </td>
                         <td className="p-4 text-center">
                           <button
@@ -250,9 +251,9 @@ export default function SessionsView({
                           <div className="text-[10px] text-slate-400 font-mono">Started: {formatDate(sess.startTime)}</div>
                         </td>
                         <td className="p-4 text-slate-600 font-mono">{sess.durationMinutes} minutes</td>
-                        <td className="p-4 font-mono text-slate-500">₹{sess.ratePerHour.toFixed(2)}/hr</td>
+                        <td className="p-4 font-mono text-slate-500">{formatCurrency(sess.ratePerHour.toFixed(2), currency)}/hr</td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">
-                          ₹{sess.totalCost.toFixed(2)}
+                          {formatCurrency(sess.totalCost.toFixed(2), currency)}
                         </td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
@@ -295,7 +296,7 @@ export default function SessionsView({
                 >
                   {systemTypes.length === 0 && <option value="">No system types configured</option>}
                   {systemTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name} (₹{parseFloat(t.hourlyBaseRate).toFixed(2)}/hr)</option>
+                    <option key={t.id} value={t.id}>{t.name} ({formatCurrency(parseFloat(t.hourlyBaseRate).toFixed(2), currency)}/hr)</option>
                   ))}
                 </select>
               </div>
@@ -345,7 +346,7 @@ export default function SessionsView({
               <div className="space-y-3 text-xs font-mono">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Base Hourly Rate:</span>
-                  <span className="text-slate-200">₹{hourlyRate.toFixed(2)}/hr</span>
+                  <span className="text-slate-200">{formatCurrency(hourlyRate.toFixed(2), currency)}/hr</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Total Hours booked:</span>
@@ -353,11 +354,11 @@ export default function SessionsView({
                 </div>
                 <div className="flex justify-between border-t border-slate-800 pt-2.5">
                   <span className="text-slate-400">Subtotal:</span>
-                  <span className="text-slate-200">₹{rawSubtotal.toFixed(2)}</span>
+                  <span className="text-slate-200">{formatCurrency(rawSubtotal.toFixed(2), currency)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Local Tax ({calcTax ? `${settings.taxRate}%` : "0%"}):</span>
-                  <span className="text-slate-200">₹{taxAmount.toFixed(2)}</span>
+                  <span className="text-slate-200">{formatCurrency(taxAmount.toFixed(2), currency)}</span>
                 </div>
               </div>
             </div>
@@ -365,7 +366,7 @@ export default function SessionsView({
             <div className="mt-8 pt-4 border-t border-dashed border-slate-800 space-y-4">
               <div className="flex justify-between items-baseline">
                 <span className="text-xs font-bold text-slate-400 font-mono uppercase">Grand Total Due:</span>
-                <span className="text-3xl font-bold font-mono text-white tracking-tight">₹{finalTotal.toFixed(2)}</span>
+                <span className="text-3xl font-bold font-mono text-white tracking-tight">{formatCurrency(finalTotal.toFixed(2), currency)}</span>
               </div>
             </div>
           </div>

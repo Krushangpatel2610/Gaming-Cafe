@@ -16,7 +16,6 @@ import {
 export const initialSettings: SystemSettings = {
   loungeName: "GameCentral Esports Lounge",
   currency: "INR",
-  currencySymbol: "₹",
   taxRate: 8.5,
   openingTime: "10:00",
   closingTime: "02:00",

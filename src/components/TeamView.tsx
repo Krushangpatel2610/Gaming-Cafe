@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { UserPlus, ShieldCheck, X, UserMinus, Crown } from "lucide-react";
@@ -7,6 +8,7 @@ import { listStoreAdmins, createStoreAdmin, updateStoreAdmin, deactivateStoreAdm
 import { ApiStoreAdmin, ApiStoreAdminRole } from "../api/types";
 
 interface TeamViewProps {
+  currency: string;
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
 
@@ -16,7 +18,7 @@ const ROLE_BADGE: Record<ApiStoreAdminRole, string> = {
   staff: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-export default function TeamView({ onNotify }: TeamViewProps) {
+export default function TeamView({ currency, onNotify }: TeamViewProps) {
   const { storeId, admin } = useAuth();
   const [admins, setAdmins] = useState<ApiStoreAdmin[]>([]);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);

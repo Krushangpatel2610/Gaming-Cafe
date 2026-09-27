@@ -1,3 +1,4 @@
+import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { ShieldQuestion, X, Eye, Gavel } from "lucide-react";
@@ -7,6 +8,7 @@ import { listDisputes, startDisputeReview, resolveDispute, ResolveDisputeBody } 
 import { ApiCustomer, ApiDispute, ApiDisputeResolution, ApiDisputeStatus } from "../api/types";
 
 interface DisputesViewProps {
+  currency: string;
   customers: ApiCustomer[];
   onNotify: (message: string, severity: "info" | "success" | "danger" | "warning") => void;
 }
@@ -20,7 +22,7 @@ const STATUS_BADGE: Record<ApiDisputeStatus, string> = {
 
 const RESOLUTIONS: ApiDisputeResolution[] = ["upheld", "partial_refund", "full_refund", "credit_issued"];
 
-export default function DisputesView({ customers, onNotify }: DisputesViewProps) {
+export default function DisputesView({ currency, customers, onNotify }: DisputesViewProps) {
   const { storeId, admin } = useAuth();
   const [disputes, setDisputes] = useState<ApiDispute[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("All");
@@ -110,7 +112,7 @@ export default function DisputesView({ customers, onNotify }: DisputesViewProps)
                 </div>
                 <p className="text-xs text-slate-600 line-clamp-3">{d.reason}</p>
                 <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-100">
-                  <span>Disputed: ₹{parseFloat(d.disputeAmount).toFixed(2)}</span>
+                  <span>Disputed: {formatCurrency(parseFloat(d.disputeAmount).toFixed(2), currency)}</span>
                   <span>{new Date(d.createdAt).toLocaleDateString()}</span>
                 </div>
                 {d.status === "resolved" && (
@@ -139,7 +141,7 @@ export default function DisputesView({ customers, onNotify }: DisputesViewProps)
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 font-display">Resolve Dispute</h3>
-                <p className="text-xs text-slate-400 mt-1">Disputed amount: ₹{parseFloat(selected.disputeAmount).toFixed(2)}</p>
+                <p className="text-xs text-slate-400 mt-1">Disputed amount: {formatCurrency(parseFloat(selected.disputeAmount).toFixed(2), currency)}</p>
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
             </div>
