@@ -1,7 +1,8 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle } from "lucide-react";
+import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle, Sparkles, Loader2, RefreshCw } from "lucide-react";
+import { listPendingPurchases, confirmPurchase, rejectPurchase, ApiGamepassPurchase } from "../api/gamepass";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from "../api/payments";
@@ -47,6 +48,11 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const [rejectReason, setRejectReason] = useState<string>("");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  const [gamepassRequests, setGamepassRequests] = useState<ApiGamepassPurchase[]>([]);
+  const [rejectGamepassTarget, setRejectGamepassTarget] = useState<ApiGamepassPurchase | null>(null);
+  const [rejectGamepassReason, setRejectGamepassReason] = useState<string>("");
+  const [processingGamepassId, setProcessingGamepassId] = useState<string | null>(null);
+
   const canRecord = admin?.role === "super_admin" || admin?.role === "admin";
   const canRefund = admin?.role === "super_admin";
   const canReviewTopups = admin?.role === "super_admin" || admin?.role === "admin";
@@ -58,6 +64,47 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
       setTopupRequests(data);
     } catch (err) {
       onNotify(`Failed to load top-up requests: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  const refreshGamepassRequests = async () => {
+    if (!storeId) return;
+    try {
+      const { data } = await listPendingPurchases(storeId);
+      setGamepassRequests(data);
+    } catch (err) {
+      // Non-fatal background fetch
+    }
+  };
+
+  const handleConfirmGamepass = async (req: ApiGamepassPurchase) => {
+    if (!storeId) return;
+    setProcessingGamepassId(req.id);
+    try {
+      await confirmPurchase(storeId, req.id);
+      onNotify(`Confirmed gamepass purchase for ${req.package?.name || "Player"}.`, "success");
+      await refreshGamepassRequests();
+    } catch (err) {
+      onNotify(`Failed to confirm gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingGamepassId(null);
+    }
+  };
+
+  const handleRejectGamepassSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeId || !rejectGamepassTarget) return;
+    setProcessingGamepassId(rejectGamepassTarget.id);
+    try {
+      await rejectPurchase(storeId, rejectGamepassTarget.id, rejectGamepassReason);
+      onNotify("Gamepass request rejected.", "info");
+      setRejectGamepassTarget(null);
+      setRejectGamepassReason("");
+      await refreshGamepassRequests();
+    } catch (err) {
+      onNotify(`Failed to reject gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingGamepassId(null);
     }
   };
 
@@ -92,7 +139,14 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   }, [storeId, page]);
 
   useEffect(() => {
+    if (!storeId) return;
     refreshTopupRequests();
+    refreshGamepassRequests();
+    const interval = setInterval(() => {
+      refreshTopupRequests();
+      refreshGamepassRequests();
+    }, 8000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
@@ -228,6 +282,75 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                       onClick={() => setRejectTarget(req)}
                       disabled={processingId === req.id}
                       className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Gamepass requests — player-submitted, needs staff confirm/reject */}
+      {canReviewTopups && gamepassRequests.length > 0 && (
+        <div className="bg-white rounded-xl border border-indigo-200 shadow-precision overflow-hidden">
+          <div className="px-4 py-3 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <h3 className="text-sm font-bold text-indigo-900">Pending Gamepass Purchases ({gamepassRequests.length})</h3>
+            </div>
+            <button
+              onClick={refreshGamepassRequests}
+              className="p-1 hover:bg-indigo-100 rounded text-indigo-600 transition-colors"
+              title="Refresh gamepass requests"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {gamepassRequests.map((req) => {
+              const cust = customers.find((c) => c.userId === req.userId);
+              const pkgName = req.package?.name || "Gamepass Package";
+              const price = req.package?.price ? parseFloat(req.package.price).toFixed(2) : "0.00";
+              return (
+                <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                        {pkgName}
+                      </span>
+                      <p className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(price, currency)}</p>
+                      <span className="text-xs text-slate-500 font-medium">
+                        {cust?.name || cust?.phone || `Player ${req.userId.slice(0, 8)}`}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {new Date(req.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleConfirmGamepass(req)}
+                      disabled={processingGamepassId === req.id}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
+                    >
+                      {processingGamepassId === req.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectGamepassTarget(req);
+                        setRejectGamepassReason("");
+                      }}
+                      disabled={processingGamepassId === req.id}
+                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                       Reject
@@ -382,6 +505,56 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
               <div className="flex space-x-3 pt-2">
                 <button type="button" onClick={() => setRefundTarget(null)} className="flex-1 py-2 border border-slate-200 text-slate-500 rounded-lg text-xs font-semibold hover:bg-slate-50">Cancel</button>
                 <button type="submit" className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow-lg">Confirm Refund</button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Reject Gamepass Request */}
+      {rejectGamepassTarget && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900 font-display">Reject Gamepass Request</h3>
+              <p className="text-xs text-slate-400 mt-1">Please provide a reason for rejecting this purchase.</p>
+            </div>
+            <form onSubmit={handleRejectGamepassSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Reason</label>
+                <input
+                  type="text"
+                  required
+                  minLength={3}
+                  value={rejectGamepassReason}
+                  onChange={(e) => setRejectGamepassReason(e.target.value)}
+                  placeholder="e.g. Payment not received on UPI"
+                  className="w-full mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-red-500 focus:bg-white transition-all"
+                />
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectGamepassTarget(null);
+                    setRejectGamepassReason("");
+                  }}
+                  className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingGamepassId === rejectGamepassTarget.id}
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-red-500/10 flex items-center justify-center gap-1"
+                >
+                  {processingGamepassId === rejectGamepassTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Reject</span>
+                </button>
               </div>
             </form>
           </motion.div>
