@@ -49,6 +49,18 @@ export interface ApiSystemSpecs {
   extras?: string;
 }
 
+export interface ApiSystemSessionInfo {
+  sessionId: string;
+  userId: string | null;
+  userName: string | null;
+  startedAt: string;
+  durationMinutes: number | null;
+  bookingId: string | null;
+  targetCapMinutes?: number | null;
+  capChoiceMade?: boolean;
+  remainingMinutes?: number | null;
+}
+
 export interface ApiSystem {
   id: string;
   storeId: string;
@@ -62,6 +74,7 @@ export interface ApiSystem {
   specs?: ApiSystemSpecs;
   isAgentOnline?: boolean;
   currentSessionId?: string;
+  currentSession?: ApiSystemSessionInfo | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -81,6 +94,8 @@ export interface ApiSession {
   isBilled: boolean;
   walkInPhone: string | null;
   notes: string | null;
+  targetCapMinutes?: number | null;
+  capChoiceMade?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -48,9 +48,26 @@ export function platformToPCGroup(platform: ApiSystem["platform"]): PCGroup {
 export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | null): PC {
   const specs = system.specs || {};
   let timeRemaining: number | undefined;
-  if (activeSession && activeSession.durationMinutes != null) {
+
+  const targetCap = activeSession?.targetCapMinutes ?? system.currentSession?.targetCapMinutes;
+  const capChoiceMade = activeSession?.capChoiceMade ?? system.currentSession?.capChoiceMade;
+  const startedAt = activeSession?.startedAt ?? system.currentSession?.startedAt;
+
+  if (system.currentSession?.remainingMinutes != null) {
+    // Backend-computed, funded-balance/gamepass-aware, and already clamped
+    // to the player's target cap when one is set -- prefer this whenever
+    // it's available rather than recomputing a cruder estimate here.
+    timeRemaining = Math.max(0, system.currentSession.remainingMinutes * 60);
+  } else if (activeSession && activeSession.durationMinutes != null) {
     const startedAtMs = new Date(activeSession.startedAt).getTime();
     const endsAtMs = startedAtMs + activeSession.durationMinutes * 60 * 1000;
+    timeRemaining = Math.max(0, Math.round((endsAtMs - Date.now()) / 1000));
+  } else if (targetCap != null && startedAt) {
+    // Last-resort estimate when only a bare session (no live system.currentSession
+    // data) is available -- this can't account for funded balance running out
+    // before the cap does, since that isn't part of this shape.
+    const startedAtMs = new Date(startedAt).getTime();
+    const endsAtMs = startedAtMs + targetCap * 60 * 1000;
     timeRemaining = Math.max(0, Math.round((endsAtMs - Date.now()) / 1000));
   }
 
@@ -66,10 +83,14 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
       ram: specs.ram || "Unknown",
       monitor: specs.monitor || "Unknown",
     },
-    activeSessionId: activeSession?.id,
-    currentUser: activeSession ? activeSession.walkInPhone || activeSession.userId || "Guest" : undefined,
+    activeSessionId: activeSession?.id ?? system.currentSession?.sessionId,
+    currentUser: activeSession
+      ? activeSession.walkInPhone || activeSession.userId || "Guest"
+      : system.currentSession?.userName || (system.currentSession ? "Guest" : undefined),
     timeRemaining,
     systemTypeId: system.systemTypeId,
+    targetCapMinutes: targetCap,
+    capChoiceMade: capChoiceMade,
   };
 }
 

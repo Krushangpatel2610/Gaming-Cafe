@@ -396,11 +396,21 @@ export default function LivePCsView({ currency, pcs,
                     </div>
                     <div className="flex justify-between items-center text-[11px] text-indigo-800 font-mono">
                       <div className="flex items-center space-x-1">
-                        <Clock className="w-3 h-3 text-indigo-600" />
-                        <span>{formatRemaining(pc.timeRemaining)}</span>
+                        <Clock className={`w-3 h-3 ${pc.timeRemaining !== undefined && pc.timeRemaining <= 900 ? "text-amber-600 animate-pulse" : "text-indigo-600"}`} />
+                        <span className={pc.timeRemaining !== undefined && pc.timeRemaining <= 900 ? "text-amber-700 font-bold" : ""}>
+                          {formatRemaining(pc.timeRemaining)}
+                        </span>
                       </div>
                       <span className="font-bold">{formatCurrency(rate.toFixed(2), currency)}/hr</span>
                     </div>
+                    {pc.targetCapMinutes != null && (
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-indigo-100/60 pt-1.5 font-mono">
+                        <span className="text-slate-400">Target Goal:</span>
+                        <span className="bg-indigo-100/80 text-indigo-800 px-1.5 py-0.5 rounded font-semibold">
+                          {Math.floor(pc.targetCapMinutes / 60)}h {pc.targetCapMinutes % 60}m cap
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1">
