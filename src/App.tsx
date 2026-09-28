@@ -36,6 +36,7 @@ import { listSystemTypes, updateSystemTypeRate, createSystemType } from "./api/s
 import { updateStore, getStoreProfile } from "./api/stores";
 import { ApiCustomer, ApiGame, ApiApp, ApiCampaign, ApiSystemType } from "./api/types";
 import GamepassView from "./components/GamepassView";
+import GuestAccessView from "./components/GuestAccessView";
 
 import {
   PC,
@@ -866,6 +867,10 @@ function Dashboard() {
               onDeleteSystem={handleDeleteSystem}
               onRegenerateKey={handleRegenerateKey}
             />
+          )}
+
+          {activeTab === "guest_access" && (
+            <GuestAccessView pcs={pcs} onNotify={notify} />
           )}
 
           {activeTab === "bookings" && (

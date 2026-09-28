@@ -17,7 +17,8 @@ import {
   BarChart3,
   ShieldQuestion,
   Bell,
-  UserCog
+  UserCog,
+  KeyRound
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -36,6 +37,7 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "live_pcs", label: "Live PCs", icon: Monitor },
+    { id: "guest_access", label: "Guest Access", icon: KeyRound },
     { id: "sessions", label: "Sessions", icon: Clock },
     { id: "bookings", label: "Bookings", icon: CalendarDays },
     { id: "customers", label: "Customers", icon: Users },
