@@ -15,12 +15,27 @@ import {
   X,
   AlertCircle,
   Sparkles,
-  Trash2
+  Trash2,
+  Film,
+  Image as ImageIcon,
+  ArrowUp,
+  ArrowDown
 } from "lucide-react";
 import { SystemSettings } from "../types";
 import { useAuth } from "../context/AuthContext";
-import { ApiError } from "../api/client";
-import { getPaymentQr, updatePaymentQr, getBookingConfig, updateBookingConfig, getKioskSettings, updateKioskSettings, ApiKioskSettings } from "../api/stores";
+import { ApiError, buildUrl } from "../api/client";
+import {
+  getPaymentQr,
+  updatePaymentQr,
+  getBookingConfig,
+  updateBookingConfig,
+  getKioskSettings,
+  updateKioskSettings,
+  getLoginBackgroundSettings,
+  updateLoginBackgroundSettings,
+  uploadLoginMedia,
+  ApiKioskSettings
+} from "../api/stores";
 import {
   getLoyaltySettings,
   updateLoyaltySettings,
@@ -29,7 +44,14 @@ import {
   updateLoyaltyReward,
   deleteLoyaltyReward,
 } from "../api/loyalty";
-import { ApiBookingConfig, ApiPaymentQr, ApiLoyaltySettings, ApiLoyaltyReward } from "../api/types";
+import {
+  ApiBookingConfig,
+  ApiPaymentQr,
+  ApiLoyaltySettings,
+  ApiLoyaltyReward,
+  ApiLoginBackgroundMediaItem,
+  ApiLoginBackgroundSettings
+} from "../api/types";
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -201,6 +223,94 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
       setRewards((prev) => prev.filter((r) => r.id !== reward.id));
     } catch (err) {
       window.alert(`Failed to delete reward: ${err instanceof ApiError ? err.message : "unknown error"}`);
+    }
+  };
+
+  // ── Kiosk Sign-in Background Media (super_admin / admin editable) ─────────
+  const [bgMediaList, setBgMediaList] = useState<ApiLoginBackgroundMediaItem[]>([]);
+  const [bgChangeInterval, setBgChangeInterval] = useState<number>(15);
+  const [uploadingMedia, setUploadingMedia] = useState<boolean>(false);
+  const [savingBgMedia, setSavingBgMedia] = useState<boolean>(false);
+  const [bgMediaSaved, setBgMediaSaved] = useState<boolean>(false);
+  const [urlInput, setUrlInput] = useState<string>("");
+  const [urlName, setUrlName] = useState<string>("");
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getLoginBackgroundSettings(storeId)
+      .then((res) => {
+        setBgMediaList(res.media || []);
+        setBgChangeInterval(res.changeIntervalSeconds || 15);
+      })
+      .catch(() => {});
+  }, [storeId]);
+
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !storeId) return;
+    setUploadingMedia(true);
+    setMediaError(null);
+
+    try {
+      const newItems: ApiLoginBackgroundMediaItem[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const item = await uploadLoginMedia(storeId, files[i]);
+        newItems.push(item);
+      }
+      setBgMediaList((prev) => [...prev, ...newItems]);
+    } catch (err) {
+      setMediaError(err instanceof ApiError ? err.message : "Failed to upload file(s).");
+    } finally {
+      setUploadingMedia(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleAddMediaUrl = () => {
+    if (!urlInput.trim()) return;
+    const newItem: ApiLoginBackgroundMediaItem = {
+      id: crypto.randomUUID(),
+      type: "image",
+      url: urlInput.trim(),
+      name: urlName.trim() || "Photo Backdrop",
+    };
+    setBgMediaList((prev) => [...prev, newItem]);
+    setUrlInput("");
+    setUrlName("");
+  };
+
+  const handleRemoveMedia = (id: string) => {
+    setBgMediaList((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  const handleMoveMedia = (index: number, direction: -1 | 1) => {
+    const targetIdx = index + direction;
+    if (targetIdx < 0 || targetIdx >= bgMediaList.length) return;
+    const updated = [...bgMediaList];
+    const temp = updated[index];
+    updated[index] = updated[targetIdx];
+    updated[targetIdx] = temp;
+    setBgMediaList(updated);
+  };
+
+  const handleSaveBgMedia = async () => {
+    if (!storeId) return;
+    setSavingBgMedia(true);
+    setMediaError(null);
+    try {
+      const updated = await updateLoginBackgroundSettings(storeId, {
+        media: bgMediaList,
+        changeIntervalSeconds: bgChangeInterval,
+      });
+      setBgMediaList(updated.media || []);
+      setBgChangeInterval(updated.changeIntervalSeconds || 15);
+      setBgMediaSaved(true);
+      setTimeout(() => setBgMediaSaved(false), 3000);
+    } catch (err) {
+      setMediaError(err instanceof ApiError ? err.message : "Failed to save media settings.");
+    } finally {
+      setSavingBgMedia(false);
     }
   };
 
@@ -801,6 +911,263 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
                   <Plus className="w-3.5 h-3.5" />
                   Add
                 </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Kiosk Sign-In Screen Background Photos & Slideshow */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6 md:col-span-3 shadow-precision">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-slate-100 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                <ImageIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base font-display">
+                  Kiosk Sign-in Background Photos &amp; Slideshow
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Upload multiple photos to show on the physical gaming PC login/sign-in screen background.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {bgMediaSaved && (
+                <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 animate-bounce">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Photos Saved!</span>
+                </div>
+              )}
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={handleSaveBgMedia}
+                  disabled={savingBgMedia}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingBgMedia ? "Saving…" : "Save Photo Settings"}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {mediaError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <span>{mediaError}</span>
+            </div>
+          )}
+
+          {/* Time Interval & Upload controls */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 bg-slate-50/70 p-5 rounded-xl border border-slate-100">
+            {/* Interval Configuration */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+                  Slide Change Interval
+                </label>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                How often does the background change to the next photo on the kiosk sign-in screen?
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={3}
+                  max={3600}
+                  disabled={!isSuperAdmin}
+                  value={bgChangeInterval}
+                  onChange={(e) => setBgChangeInterval(Math.max(3, parseInt(e.target.value) || 15))}
+                  className="w-24 px-3 py-2 border border-slate-200 text-xs font-bold text-slate-800 rounded-lg bg-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <span className="text-xs font-semibold text-slate-500">seconds per slide</span>
+              </div>
+              <div className="flex items-center gap-1.5 pt-1">
+                {[5, 10, 15, 30, 60].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    disabled={!isSuperAdmin}
+                    onClick={() => setBgChangeInterval(sec)}
+                    className={`px-2 py-1 rounded text-[11px] font-mono font-bold border transition-colors ${
+                      bgChangeInterval === sec
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300"
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Upload Files */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-2">
+                <Upload className="w-4 h-4 text-indigo-600" />
+                <span>Upload Photos</span>
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Select one or multiple photos from your computer (PNG, JPG, WebP, GIF).
+              </p>
+              <div className="relative">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/*"
+                  disabled={!isSuperAdmin || uploadingMedia}
+                  onChange={handleMediaUpload}
+                  className="hidden"
+                  id="login-media-upload-input"
+                />
+                <label
+                  htmlFor="login-media-upload-input"
+                  className={`w-full h-24 border-2 border-dashed border-slate-200 hover:border-indigo-400 bg-white rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                    uploadingMedia || !isSuperAdmin ? "opacity-50 pointer-events-none" : ""
+                  }`}
+                >
+                  <Upload className="w-5 h-5 text-indigo-500" />
+                  <span className="text-xs font-bold text-slate-700">
+                    {uploadingMedia ? "Uploading photos…" : "Choose Photos"}
+                  </span>
+                  <span className="text-[10px] text-slate-400">Multiple photos supported</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Add by URL */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-2">
+                <Plus className="w-4 h-4 text-indigo-600" />
+                <span>Add Photo by URL (CDN or Direct Link)</span>
+              </label>
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  value={urlName}
+                  onChange={(e) => setUrlName(e.target.value)}
+                  disabled={!isSuperAdmin}
+                  placeholder="Label / Title (optional, e.g. Arena Stage)"
+                  className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddMediaUrl()}
+                    disabled={!isSuperAdmin}
+                    placeholder="https://example.com/wallpaper.jpg"
+                    className="flex-1 px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-white font-mono focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddMediaUrl}
+                    disabled={!isSuperAdmin || !urlInput.trim()}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Media Playlist Gallery */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-2">
+                <span>Slideshow Photos ({bgMediaList.length} photo{bgMediaList.length === 1 ? "" : "s"})</span>
+              </label>
+              {bgMediaList.length > 0 && (
+                <span className="text-[11px] text-slate-400">
+                  Total cycle duration: {bgMediaList.length * bgChangeInterval} seconds
+                </span>
+              )}
+            </div>
+
+            {bgMediaList.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 border border-slate-100 rounded-xl space-y-2">
+                <ImageIcon className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-semibold text-slate-600">No background photos added yet</p>
+                <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                  When no photos are uploaded, the kiosk sign-in screen uses the default cyber arena theme. Upload arena photos, gaming wallpapers, or promotional graphics to showcase on your gaming stations.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {bgMediaList.map((item, index) => {
+                  const resolvedUrl = buildUrl(item.url);
+                  return (
+                    <div
+                      key={item.id}
+                      className="group relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
+                    >
+                      {/* Photo Preview Box */}
+                      <div className="relative w-full h-36 bg-slate-900 flex items-center justify-center overflow-hidden">
+                        <img
+                          src={resolvedUrl}
+                          alt={item.name || "Background"}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-emerald-950/80 backdrop-blur-md text-emerald-300 font-mono text-[10px] font-bold tracking-wider flex items-center gap-1 border border-emerald-700/50">
+                          <ImageIcon className="w-3 h-3 text-emerald-400" />
+                          <span>PHOTO</span>
+                        </div>
+                        <span className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-white font-mono text-[10px]">
+                          #{index + 1}
+                        </span>
+                      </div>
+
+                      {/* Info & Action Footer */}
+                      <div className="p-3 flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/50">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-slate-800 truncate" title={item.name || item.url}>
+                            {item.name || `Slide #${index + 1}`}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-mono truncate" title={item.url}>
+                            {item.url}
+                          </p>
+                        </div>
+
+                        {isSuperAdmin && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveMedia(index, -1)}
+                              disabled={index === 0}
+                              className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 transition-colors"
+                              title="Move earlier"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveMedia(index, 1)}
+                              disabled={index === bgMediaList.length - 1}
+                              className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-20 transition-colors"
+                              title="Move later"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMedia(item.id)}
+                              className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                              title="Remove media"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

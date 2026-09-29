@@ -573,3 +573,20 @@ export interface ApiCreditTransaction {
   createdAt: string;
 }
 
+// ── Kiosk Sign-in Background Media ──────────────────────────────────────────
+
+export interface ApiLoginBackgroundMediaItem {
+  id: string;
+  type: "image";
+  url: string;
+  name?: string;
+}
+
+export interface ApiLoginBackgroundSettings {
+  backgroundVideoUrl: string | null;
+  backgroundImageUrl: string | null;
+  media: ApiLoginBackgroundMediaItem[];
+  changeIntervalSeconds: number;
+}
+
+

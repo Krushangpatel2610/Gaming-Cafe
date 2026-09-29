@@ -1,5 +1,12 @@
-import { apiGet, apiGetPaginated, apiPatch, apiPost } from "./client";
-import { ApiAdmin, ApiBookingConfig, ApiPaymentQr, ApiStore } from "./types";
+import { apiGet, apiGetPaginated, apiPatch, apiPost, apiPostFormData } from "./client";
+import {
+  ApiAdmin,
+  ApiBookingConfig,
+  ApiPaymentQr,
+  ApiStore,
+  ApiLoginBackgroundSettings,
+  ApiLoginBackgroundMediaItem,
+} from "./types";
 
 export function updateStore(storeId: string, body: { name?: string }): Promise<ApiStore> {
   return apiPatch<ApiStore>(`/stores/${storeId}`, body);
@@ -77,3 +84,29 @@ export function updateKioskSettings(
 ): Promise<ApiKioskSettings> {
   return apiPatch(`/stores/${storeId}/kiosk-settings`, body);
 }
+
+export function getLoginBackgroundSettings(storeId: string): Promise<ApiLoginBackgroundSettings> {
+  return apiGet(`/stores/${storeId}/login-background`);
+}
+
+export function updateLoginBackgroundSettings(
+  storeId: string,
+  body: {
+    backgroundVideoUrl?: string | null;
+    backgroundImageUrl?: string | null;
+    media?: ApiLoginBackgroundMediaItem[];
+    changeIntervalSeconds?: number;
+  }
+): Promise<ApiLoginBackgroundSettings> {
+  return apiPatch(`/stores/${storeId}/login-background`, body);
+}
+
+export function uploadLoginMedia(
+  storeId: string,
+  file: File
+): Promise<ApiLoginBackgroundMediaItem> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiPostFormData(`/stores/${storeId}/login-background/upload`, formData);
+}
+

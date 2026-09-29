@@ -72,7 +72,7 @@ export interface ApiListResult<T> {
 
 let isRefreshing = false;
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalizedPath = `/${path.replace(/^\/+/, "")}`;
   return `${BASE_URL}${normalizedPath}`;
@@ -108,8 +108,9 @@ async function tryRefresh(): Promise<string | null> {
 
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<ApiListResult<T>> {
   const token = getStoredToken();
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...((options.headers as Record<string, string> | undefined) || {}),
   };
   if (token) {
@@ -172,6 +173,15 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
     await apiRequest<T>(path, {
       method: "POST",
       body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
+  ).data;
+}
+
+export async function apiPostFormData<T>(path: string, formData: FormData): Promise<T> {
+  return (
+    await apiRequest<T>(path, {
+      method: "POST",
+      body: formData,
     })
   ).data;
 }
