@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { adminLogin, adminLogout, getAdminMe } from "../api/auth";
 import { userLoginEmail } from "../api/auth";
 import { getUserProfile } from "../api/user";
-import { getStoredToken, setStoredToken, setUnauthorizedHandler, ApiError } from "../api/client";
+import { getStoredToken, setStoredToken, setUnauthorizedHandler, setRememberMe, getAuthStorage, ApiError } from "../api/client";
 import { ApiAdmin, ApiAdminLoginResponse, ApiUser } from "../api/types";
 
 const ADMIN_REFRESH_KEY = "gc_admin_refresh_token";
@@ -22,12 +22,12 @@ interface AuthContextValue {
   error: string | null;
 
   // Admin auth
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => void;
-  applySession: (result: ApiAdminLoginResponse) => void;
+  applySession: (result: ApiAdminLoginResponse, rememberMe?: boolean) => void;
 
   // User auth
-  userLogin: (email: string, password: string, storeId: string) => Promise<void>;
+  userLogin: (email: string, password: string, storeId: string, rememberMe?: boolean) => Promise<void>;
   userLogout: () => void;
 }
 
@@ -42,7 +42,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearAdminSession = useCallback(() => {
     setStoredToken(null);
+    // Clear from both storages -- the active one may have changed since
+    // login if the remember-me choice was different last time.
     localStorage.removeItem(ADMIN_REFRESH_KEY);
+    sessionStorage.removeItem(ADMIN_REFRESH_KEY);
     localStorage.removeItem(SESSION_TYPE_KEY);
     setAdmin(null);
   }, []);
@@ -50,7 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearUserSession = useCallback(() => {
     setStoredToken(null);
     localStorage.removeItem(USER_REFRESH_KEY);
+    sessionStorage.removeItem(USER_REFRESH_KEY);
     localStorage.removeItem(USER_STORE_KEY);
+    sessionStorage.removeItem(USER_STORE_KEY);
     localStorage.removeItem(SESSION_TYPE_KEY);
     setUser(null);
     setUserStoreIdState(null);
@@ -80,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
 
     if (sessionType === "user") {
-      const storedStoreId = localStorage.getItem(USER_STORE_KEY);
+      const storedStoreId = getAuthStorage().getItem(USER_STORE_KEY);
       getUserProfile()
         .then((u) => {
           setUser(u);
@@ -96,20 +101,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applySession = useCallback((result: ApiAdminLoginResponse) => {
+  const applySession = useCallback((result: ApiAdminLoginResponse, rememberMe = true) => {
     clearUserSession();
+    setRememberMe(rememberMe);
     setStoredToken(result.accessToken);
-    localStorage.setItem(ADMIN_REFRESH_KEY, result.refreshToken);
+    getAuthStorage().setItem(ADMIN_REFRESH_KEY, result.refreshToken);
     localStorage.setItem(SESSION_TYPE_KEY, "admin");
     setAdmin(result.admin);
     setUser(null);
   }, [clearUserSession]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, rememberMe = true) => {
     setError(null);
     try {
-      const result = await adminLogin(email, password);
-      applySession(result);
+      const result = await adminLogin(email, password, rememberMe);
+      applySession(result, rememberMe);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Unable to sign in.";
       setError(message);
@@ -118,19 +124,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applySession]);
 
   const logout = useCallback(() => {
-    const refreshToken = localStorage.getItem(ADMIN_REFRESH_KEY) || undefined;
+    const refreshToken = getAuthStorage().getItem(ADMIN_REFRESH_KEY) || undefined;
     adminLogout(refreshToken).catch(() => {});
     clearAdminSession();
   }, [clearAdminSession]);
 
-  const userLogin = useCallback(async (email: string, password: string, storeId: string) => {
+  const userLogin = useCallback(async (email: string, password: string, storeId: string, rememberMe = true) => {
     setError(null);
     try {
-      const result = await userLoginEmail(email, password);
+      const result = await userLoginEmail(email, password, rememberMe);
       clearAdminSession();
+      setRememberMe(rememberMe);
       setStoredToken(result.accessToken);
-      localStorage.setItem(USER_REFRESH_KEY, result.refreshToken);
-      localStorage.setItem(USER_STORE_KEY, storeId);
+      const storage = getAuthStorage();
+      storage.setItem(USER_REFRESH_KEY, result.refreshToken);
+      storage.setItem(USER_STORE_KEY, storeId);
       localStorage.setItem(SESSION_TYPE_KEY, "user");
       setUser(result.user);
       setUserStoreIdState(storeId);

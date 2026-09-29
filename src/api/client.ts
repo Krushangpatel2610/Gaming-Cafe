@@ -5,6 +5,23 @@ const TOKEN_KEY = "gc_admin_token";
 const USER_REFRESH_KEY = "gc_user_refresh_token";
 const ADMIN_REFRESH_KEY = "gc_admin_refresh_token";
 const SESSION_TYPE_KEY = "gc_session_type";
+// Whether the current login should survive closing the browser
+// ("remember me"). This flag itself always lives in localStorage -- it's
+// not sensitive, and tryRefresh() needs to read it with no React state
+// available to know where the actual tokens are stored. Absent = treated
+// as remembered, so existing sessions from before this flag existed keep
+// working unchanged.
+const REMEMBER_ME_KEY = "gc_remember_me";
+
+export function getAuthStorage(): Storage {
+  return localStorage.getItem(REMEMBER_ME_KEY) === "false" ? sessionStorage : localStorage;
+}
+
+// Call before writing any session data on login, so every subsequent read/
+// write (including token refresh) agrees on which storage is active.
+export function setRememberMe(remember: boolean): void {
+  localStorage.setItem(REMEMBER_ME_KEY, remember ? "true" : "false");
+}
 
 export class ApiError extends Error {
   code: string;
@@ -21,14 +38,15 @@ export class ApiError extends Error {
 }
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return getAuthStorage().getItem(TOKEN_KEY);
 }
 
 export function setStoredToken(token: string | null): void {
+  const storage = getAuthStorage();
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    storage.setItem(TOKEN_KEY, token);
   } else {
-    localStorage.removeItem(TOKEN_KEY);
+    storage.removeItem(TOKEN_KEY);
   }
 }
 
@@ -67,7 +85,8 @@ async function tryRefresh(): Promise<string | null> {
   const refreshKey = sessionType === "admin" ? ADMIN_REFRESH_KEY : USER_REFRESH_KEY;
   const refreshPath = sessionType === "admin" ? "/auth/admin/refresh" : "/auth/refresh";
 
-  const refreshToken = localStorage.getItem(refreshKey);
+  const storage = getAuthStorage();
+  const refreshToken = storage.getItem(refreshKey);
   if (!refreshToken) return null;
 
   try {
@@ -80,7 +99,7 @@ async function tryRefresh(): Promise<string | null> {
     const body = await response.json();
     if (!body.success || !body.data?.accessToken) return null;
     setStoredToken(body.data.accessToken);
-    localStorage.setItem(refreshKey, body.data.refreshToken);
+    storage.setItem(refreshKey, body.data.refreshToken);
     return body.data.accessToken as string;
   } catch {
     return null;

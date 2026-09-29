@@ -25,6 +25,7 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -54,7 +55,7 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
     setLocalError(null);
     setSubmitting(true);
     try {
-      await login(identifier, password);
+      await login(identifier, password, rememberMe);
     } catch (adminErr) {
       // Admin login failed — try player
       const storeId = store?.id;
@@ -64,7 +65,7 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
         return;
       }
       try {
-        await userLogin(identifier, password, storeId);
+        await userLogin(identifier, password, storeId, rememberMe);
       } catch (playerErr) {
         setLocalError(
           playerErr instanceof ApiError ? playerErr.message : "Invalid email or password."
@@ -226,6 +227,16 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
                         </button>
                       </div>
                     </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/30"
+                      />
+                      <span className="text-xs text-slate-500">Remember me</span>
+                    </label>
 
                     {displayError && (
                       <div className="flex items-start gap-2 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg p-3">

@@ -1,8 +1,8 @@
 import { apiGet, apiPost } from "./client";
 import { ApiAdmin, ApiAdminLoginResponse, ApiUser, ApiUserLoginResponse } from "./types";
 
-export function adminLogin(email: string, password: string): Promise<ApiAdminLoginResponse> {
-  return apiPost<ApiAdminLoginResponse>("/auth/admin/login", { email, password });
+export function adminLogin(email: string, password: string, rememberMe = true): Promise<ApiAdminLoginResponse> {
+  return apiPost<ApiAdminLoginResponse>("/auth/admin/login", { email, password, rememberMe });
 }
 
 export function adminLogout(refreshToken?: string, all?: boolean): Promise<void> {
@@ -32,6 +32,6 @@ export function registerUser(body: { name: string; email: string; password: stri
   return apiPost("/auth/register", body);
 }
 
-export function userLoginEmail(email: string, password: string): Promise<ApiUserLoginResponse> {
-  return apiPost<ApiUserLoginResponse>("/auth/login/email", { email, password });
+export function userLoginEmail(email: string, password: string, rememberMe = true): Promise<ApiUserLoginResponse> {
+  return apiPost<ApiUserLoginResponse>("/auth/login/email", { email, password, rememberMe });
 }
