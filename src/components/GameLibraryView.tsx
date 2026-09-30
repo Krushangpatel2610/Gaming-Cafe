@@ -29,11 +29,11 @@ interface GameLibraryViewProps {
   games: ApiGame[];
   systems: SystemOption[];
   storeId: string;
-  onAddGame: (name: string, genre?: string, executablePath?: string) => void;
+  onAddGame: (name: string, genre?: string) => void;
   onUpdateGameStatus: (gameId: string, isActive: boolean) => void;
-  onInstallGame: (gameId: string, systemId: string) => Promise<void>;
+  onInstallGame: (gameId: string, systemId: string, executablePath?: string | null) => Promise<void>;
   onUninstallGame: (gameId: string, systemId: string) => Promise<void>;
-  onUpdateGame: (gameId: string, data: { name: string, genre?: string, executablePath?: string }) => void;
+  onUpdateGame: (gameId: string, data: { name: string, genre?: string }) => void;
   onDeleteGame: (gameId: string, name: string) => void;
 }
 
@@ -52,17 +52,17 @@ export default function GameLibraryView({ currency, games,
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
   const [newGenre, setNewGenre] = useState<string>("");
-  const [newExecutablePath, setNewExecutablePath] = useState<string>("");
 
   // Edit modal state
   const [editGame, setEditGame] = useState<ApiGame | null>(null);
   const [editName, setEditName] = useState<string>("");
   const [editGenre, setEditGenre] = useState<string>("");
-  const [editExecutablePath, setEditExecutablePath] = useState<string>("");
 
   // Station assignment modal state
   const [assignGame, setAssignGame] = useState<ApiGame | null>(null);
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
+  const [stationPaths, setStationPaths] = useState<Record<string, string>>({});
+  const [savingPathId, setSavingPathId] = useState<string | null>(null);
   const [loadingAssign, setLoadingAssign] = useState<boolean>(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -77,25 +77,22 @@ export default function GameLibraryView({ currency, games,
 
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddGame(newName, newGenre || undefined, newExecutablePath || undefined);
+    onAddGame(newName, newGenre || undefined);
     setShowAddModal(false);
     setNewName("");
     setNewGenre("");
-    setNewExecutablePath("");
   };
 
   const openEditModal = (game: ApiGame) => {
     setEditGame(game);
     setEditName(game.name);
     setEditGenre(game.genre || "");
-    setEditExecutablePath(game.executablePath || "");
   };
 
   const closeEditModal = () => {
     setEditGame(null);
     setEditName("");
     setEditGenre("");
-    setEditExecutablePath("");
   };
 
   const handleEditGameSubmit = (e: React.FormEvent) => {
@@ -104,7 +101,6 @@ export default function GameLibraryView({ currency, games,
     onUpdateGame(editGame.id, {
       name: editName,
       genre: editGenre || undefined,
-      executablePath: editExecutablePath || undefined,
     });
     closeEditModal();
   };
@@ -118,11 +114,21 @@ export default function GameLibraryView({ currency, games,
   const openAssignModal = useCallback(async (game: ApiGame) => {
     setAssignGame(game);
     setInstalledIds(new Set());
+    setStationPaths({});
     setLoadingAssign(true);
     setAssignError(null);
     try {
-      const ids = await getGameSystems(storeId, game.id);
-      setInstalledIds(new Set(ids));
+      const assignments = await getGameSystems(storeId, game.id);
+      const ids = new Set<string>();
+      const paths: Record<string, string> = {};
+      for (const item of assignments) {
+        const sysId = typeof item === "string" ? item : item.systemId;
+        const p = typeof item === "object" ? item.executablePath || "" : "";
+        ids.add(sysId);
+        paths[sysId] = p;
+      }
+      setInstalledIds(ids);
+      setStationPaths(paths);
     } catch {
       setAssignError("Could not load station assignments.");
     } finally {
@@ -133,6 +139,7 @@ export default function GameLibraryView({ currency, games,
   const closeAssignModal = () => {
     setAssignGame(null);
     setInstalledIds(new Set());
+    setStationPaths({});
     setAssignError(null);
     setTogglingId(null);
   };
@@ -146,7 +153,7 @@ export default function GameLibraryView({ currency, games,
         await onUninstallGame(assignGame.id, systemId);
         setInstalledIds(prev => { const n = new Set(prev); n.delete(systemId); return n; });
       } else {
-        await onInstallGame(assignGame.id, systemId);
+        await onInstallGame(assignGame.id, systemId, stationPaths[systemId] || undefined);
         setInstalledIds(prev => new Set([...prev, systemId]));
       }
     } catch {
@@ -154,6 +161,25 @@ export default function GameLibraryView({ currency, games,
     } finally {
       setTogglingId(null);
     }
+  };
+
+  const handleSaveStationPath = async (systemId: string, path: string) => {
+    if (!assignGame) return;
+    setSavingPathId(systemId);
+    try {
+      await onInstallGame(assignGame.id, systemId, path || null);
+      setStationPaths(prev => ({ ...prev, [systemId]: path }));
+    } catch (err) {
+      console.error("Failed to update path:", err);
+    } finally {
+      setSavingPathId(null);
+    }
+  };
+
+  const handleFileUpload = (systemId: string, file: File) => {
+    const suggested = `C:\\Games\\${file.name}`;
+    setStationPaths(prev => ({ ...prev, [systemId]: suggested }));
+    handleSaveStationPath(systemId, suggested);
   };
 
   return (
@@ -316,17 +342,6 @@ export default function GameLibraryView({ currency, games,
                   placeholder="e.g. Action RPG"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Executable Path (optional)</label>
-                <input
-                  type="text"
-                  value={newExecutablePath}
-                  onChange={(e) => setNewExecutablePath(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
-                  placeholder="C:\Games\EldenRing\eldenring.exe or steam://rungameid/..."
-                />
-                <p className="text-[10px] text-slate-400">Path must be identical across every station this game is assigned to — leave blank to rely on automatic detection instead.</p>
-              </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -357,7 +372,7 @@ export default function GameLibraryView({ currency, games,
           >
             <div className="p-6 border-b border-slate-100 bg-slate-50/50">
               <h3 className="text-lg font-bold text-slate-900 font-display">Edit Game</h3>
-              <p className="text-xs text-slate-400 mt-1">Changes apply to the master catalog entry — station assignments are unaffected.</p>
+              <p className="text-xs text-slate-400 mt-1">Changes apply to the master catalog entry — station assignments and paths are managed via Manage Stations.</p>
             </div>
             <form onSubmit={handleEditGameSubmit} className="p-6 space-y-4">
               <div className="space-y-1">
@@ -377,16 +392,6 @@ export default function GameLibraryView({ currency, games,
                   value={editGenre}
                   onChange={(e) => setEditGenre(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Executable Path (optional)</label>
-                <input
-                  type="text"
-                  value={editExecutablePath}
-                  onChange={(e) => setEditExecutablePath(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
-                  placeholder="C:\Games\EldenRing\eldenring.exe or steam://rungameid/..."
                 />
               </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
@@ -415,11 +420,11 @@ export default function GameLibraryView({ currency, games,
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden"
+            className="bg-white rounded-xl shadow-xl max-w-lg w-full border border-slate-200 overflow-hidden"
           >
             <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-bold text-slate-900 font-display">Station Assignments</h3>
+                <h3 className="text-base font-bold text-slate-900 font-display">Station Assignments & Executable Paths</h3>
                 <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{assignGame.name}</p>
               </div>
               <button onClick={closeAssignModal} className="text-slate-400 hover:text-slate-700 mt-0.5 shrink-0">
@@ -427,7 +432,7 @@ export default function GameLibraryView({ currency, games,
               </button>
             </div>
 
-            <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
+            <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
               {loadingAssign ? (
                 <div className="flex items-center justify-center py-8 gap-2 text-slate-400 text-xs">
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -444,36 +449,88 @@ export default function GameLibraryView({ currency, games,
                 systems.map((sys) => {
                   const installed = installedIds.has(sys.id);
                   const toggling = togglingId === sys.id;
+                  const isSaving = savingPathId === sys.id;
                   return (
-                    <label
+                    <div
                       key={sys.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all select-none ${
-                        installed ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                      className={`p-3 rounded-lg border transition-all ${
+                        installed ? "border-indigo-200 bg-indigo-50/50" : "border-slate-200 bg-white"
                       } ${togglingId && togglingId !== sys.id ? "opacity-50 pointer-events-none" : ""}`}
                     >
-                      <div className="shrink-0 w-4 h-4 flex items-center justify-center">
-                        {toggling ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                        ) : (
-                          <input
-                            type="checkbox"
-                            checked={installed}
-                            onChange={() => handleToggleSystem(sys.id)}
-                            disabled={!!togglingId}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
+                      <div className="flex items-center gap-3">
+                        <div className="shrink-0 w-4 h-4 flex items-center justify-center">
+                          {toggling ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={installed}
+                              onChange={() => handleToggleSystem(sys.id)}
+                              disabled={!!togglingId}
+                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none" onClick={() => handleToggleSystem(sys.id)}>
+                          <Monitor className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="text-xs font-semibold text-slate-700 truncate">{sys.name}</span>
+                        </div>
+                        {installed && (
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded shrink-0">
+                            INSTALLED
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Monitor className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="text-xs font-semibold text-slate-700 truncate">{sys.name}</span>
-                      </div>
+
                       {installed && (
-                        <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded shrink-0">
-                          INSTALLED
-                        </span>
+                        <div className="mt-2.5 pt-2.5 border-t border-indigo-100/60 pl-7 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                              Station Executable Path
+                            </label>
+                            {isSaving && (
+                              <span className="text-[10px] text-indigo-600 flex items-center gap-1 font-mono">
+                                <Loader2 className="w-3 h-3 animate-spin" /> saving…
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={stationPaths[sys.id] ?? ""}
+                              onChange={(e) => setStationPaths(prev => ({ ...prev, [sys.id]: e.target.value }))}
+                              onBlur={(e) => handleSaveStationPath(sys.id, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleSaveStationPath(sys.id, (e.target as HTMLInputElement).value);
+                                }
+                              }}
+                              placeholder="C:\Games\GameFolder\game.exe"
+                              className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                            />
+                            <label
+                              htmlFor={`file-pick-${sys.id}`}
+                              className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg text-[11px] font-semibold cursor-pointer shrink-0 transition-colors shadow-sm"
+                              title="Browse or select executable from disk"
+                            >
+                              Browse
+                            </label>
+                            <input
+                              id={`file-pick-${sys.id}`}
+                              type="file"
+                              accept=".exe,.bat,.cmd,.lnk"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleFileUpload(sys.id, f);
+                              }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-slate-400">Path to executable specifically on {sys.name}. Press Enter or click outside to save.</p>
+                        </div>
                       )}
-                    </label>
+                    </div>
                   );
                 })
               )}

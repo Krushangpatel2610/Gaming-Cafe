@@ -580,9 +580,9 @@ function Dashboard() {
     }
   };
 
-  const handleInstallGame = async (gameId: string, systemId: string) => {
+  const handleInstallGame = async (gameId: string, systemId: string, executablePath?: string | null) => {
     if (!storeId) return;
-    await installGame(storeId, systemId, gameId);
+    await installGame(storeId, systemId, gameId, executablePath);
   };
 
   const handleUninstallGame = async (gameId: string, systemId: string) => {
@@ -726,7 +726,17 @@ function Dashboard() {
     addLog("System", `High score logged for ${entry.playerName} in "${entry.gameTitle}" [Value: ${entry.statValue}]`, "success");
   };
 
-  const handleAddPackage = async (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }, systemIds?: string[]) => {
+  const handleAddPackage = async (
+    data: {
+      name: string;
+      description?: string;
+      durationMinutes: number;
+      price: number;
+      validityDays: number;
+      validityUnit?: "days" | "hours" | "hrs";
+    },
+    systemIds?: string[]
+  ) => {
     if (!storeId) return;
     try {
       const { package: created } = await createPackage(storeId, data);
@@ -751,7 +761,17 @@ function Dashboard() {
     }
   };
 
-  const handleUpdatePackage = async (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => {
+  const handleUpdatePackage = async (
+    packageId: string,
+    data: {
+      name: string;
+      description?: string;
+      durationMinutes: number;
+      price: number;
+      validityDays: number;
+      validityUnit?: "days" | "hours" | "hrs";
+    }
+  ) => {
     if (!storeId) return;
     try {
       await updatePackage(storeId, packageId, data);

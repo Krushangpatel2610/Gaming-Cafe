@@ -36,9 +36,9 @@ interface GamepassViewProps {
   systems: SystemOption[];
   customers?: ApiCustomer[];
   storeId: string;
-  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }, systemIds?: string[]) => void;
+  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs" }, systemIds?: string[]) => void;
   onUpdatePackageStatus: (packageId: string, isActive: boolean) => void;
-  onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number }) => void;
+  onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs" }) => void;
   onAssignSystem: (packageId: string, systemId: string) => Promise<void>;
   onUnassignSystem: (packageId: string, systemId: string) => Promise<void>;
   onNotify?: (message: string, type: "success" | "danger" | "info" | "warning") => void;
@@ -63,6 +63,7 @@ export default function GamepassView({
   const [newDuration, setNewDuration] = useState<number>(60);
   const [newPrice, setNewPrice] = useState<number>(0);
   const [newValidityDays, setNewValidityDays] = useState<number>(7);
+  const [newValidityUnit, setNewValidityUnit] = useState<"days" | "hours">("days");
   const [newSystemIds, setNewSystemIds] = useState<Set<string>>(new Set());
 
   // Edit modal state
@@ -72,6 +73,7 @@ export default function GamepassView({
   const [editDuration, setEditDuration] = useState<number>(60);
   const [editPrice, setEditPrice] = useState<number>(0);
   const [editValidityDays, setEditValidityDays] = useState<number>(7);
+  const [editValidityUnit, setEditValidityUnit] = useState<"days" | "hours">("days");
 
   // Station assignment modal state
   const [assignPackage, setAssignPackage] = useState<ApiGamepassPackage | null>(null);
@@ -94,7 +96,8 @@ export default function GamepassView({
       description: newDescription || undefined,
       durationMinutes: newDuration,
       price: newPrice,
-      validityDays: newValidityDays
+      validityDays: newValidityDays,
+      validityUnit: newValidityUnit,
     }, newSystemIds.size > 0 ? Array.from(newSystemIds) : undefined);
     setShowAddModal(false);
     setNewName("");
@@ -102,6 +105,7 @@ export default function GamepassView({
     setNewDuration(60);
     setNewPrice(0);
     setNewValidityDays(7);
+    setNewValidityUnit("days");
     setNewSystemIds(new Set());
   };
 
@@ -120,6 +124,7 @@ export default function GamepassView({
     setEditDuration(pkg.durationMinutes);
     setEditPrice(parseFloat(pkg.price));
     setEditValidityDays(pkg.validityDays);
+    setEditValidityUnit(pkg.validityUnit === "hours" || pkg.validityUnit === "hrs" ? "hours" : "days");
   };
 
   const closeEditModal = () => {
@@ -135,6 +140,7 @@ export default function GamepassView({
       durationMinutes: editDuration,
       price: editPrice,
       validityDays: editValidityDays,
+      validityUnit: editValidityUnit,
     });
     closeEditModal();
   };
@@ -367,7 +373,7 @@ export default function GamepassView({
                     <span className="font-bold text-slate-700">{formatCurrency(pkg.price, currency)}</span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                    <span>Valid for {pkg.validityDays} days</span>
+                    <span>Valid for {pkg.validityDays} {pkg.validityUnit === "hours" || pkg.validityUnit === "hrs" ? "hrs" : "days"}</span>
                   </div>
                 </div>
 
@@ -476,15 +482,25 @@ export default function GamepassView({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Validity (Days)</label>
-                <input
-                  type="number"
-                  required
-                  min={1}
-                  value={newValidityDays}
-                  onChange={(e) => setNewValidityDays(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
-                />
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Validity</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={newValidityDays}
+                    onChange={(e) => setNewValidityDays(parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                  <select
+                    value={newValidityUnit}
+                    onChange={(e) => setNewValidityUnit(e.target.value as "days" | "hours")}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-semibold cursor-pointer"
+                  >
+                    <option value="days">Days</option>
+                    <option value="hours">Hours (hrs)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -591,15 +607,25 @@ export default function GamepassView({
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Validity (Days)</label>
-                <input
-                  type="number"
-                  required
-                  min={1}
-                  value={editValidityDays}
-                  onChange={(e) => setEditValidityDays(parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
-                />
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Validity</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={editValidityDays}
+                    onChange={(e) => setEditValidityDays(parseInt(e.target.value) || 1)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                  <select
+                    value={editValidityUnit}
+                    onChange={(e) => setEditValidityUnit(e.target.value as "days" | "hours")}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-semibold cursor-pointer"
+                  >
+                    <option value="days">Days</option>
+                    <option value="hours">Hours (hrs)</option>
+                  </select>
+                </div>
               </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
