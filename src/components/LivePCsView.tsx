@@ -25,7 +25,6 @@ import {
   Copy,
   Pencil,
   Gamepad2,
-  FolderOpen,
   Check,
   Loader2
 } from "lucide-react";
@@ -1290,33 +1289,6 @@ export default function LivePCsView({ currency, pcs,
                               disabled={isSaving}
                               className="flex-1 px-3 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                             />
-
-                            {/* Hidden file input for native file browsing */}
-                            <input
-                              type="file"
-                              id={`station-file-picker-${game.id}`}
-                              className="hidden"
-                              accept=".exe,.bat,.cmd,.lnk"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  const guessed = `C:\\Games\\${game.name}\\${file.name}`;
-                                  setStationGamePaths(prev => ({ ...prev, [game.id]: guessed }));
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const el = document.getElementById(`station-file-picker-${game.id}`);
-                                el?.click();
-                              }}
-                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center space-x-1 shrink-0"
-                              title="Browse for executable"
-                            >
-                              <FolderOpen className="w-3.5 h-3.5 text-slate-500" />
-                              <span>Browse</span>
-                            </button>
 
                             <button
                               type="button"

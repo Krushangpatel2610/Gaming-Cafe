@@ -176,12 +176,6 @@ export default function GameLibraryView({ currency, games,
     }
   };
 
-  const handleFileUpload = (systemId: string, file: File) => {
-    const suggested = `C:\\Games\\${file.name}`;
-    setStationPaths(prev => ({ ...prev, [systemId]: suggested }));
-    handleSaveStationPath(systemId, suggested);
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -508,23 +502,6 @@ export default function GameLibraryView({ currency, games,
                               }}
                               placeholder="C:\Games\GameFolder\game.exe"
                               className="flex-1 px-2.5 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                            />
-                            <label
-                              htmlFor={`file-pick-${sys.id}`}
-                              className="px-2.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-slate-900 rounded-lg text-[11px] font-semibold cursor-pointer shrink-0 transition-colors shadow-sm"
-                              title="Browse or select executable from disk"
-                            >
-                              Browse
-                            </label>
-                            <input
-                              id={`file-pick-${sys.id}`}
-                              type="file"
-                              accept=".exe,.bat,.cmd,.lnk"
-                              className="hidden"
-                              onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) handleFileUpload(sys.id, f);
-                              }}
                             />
                           </div>
                           <p className="text-[10px] text-slate-400">Path to executable specifically on {sys.name}. Press Enter or click outside to save.</p>
