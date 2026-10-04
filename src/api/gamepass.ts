@@ -9,6 +9,9 @@ export interface ApiGamepassPackage {
   price: string;
   validityDays: number;
   validityUnit?: string;
+  availableDuration?: number | null;
+  availableUnit?: "days" | "hours" | "hrs" | null;
+  availableUntil?: string | null;
   applicableSystemTypeIds: string[];
   dayOfWeek: number[];
   startTime: string;
@@ -30,6 +33,8 @@ export interface CreatePackageBody {
   price: number;
   validityDays?: number;
   validityUnit?: "days" | "hours" | "hrs";
+  availableDuration?: number | null;
+  availableUnit?: "days" | "hours" | "hrs";
   applicableSystemTypeIds?: string[];
   dayOfWeek?: number[];
   startTime?: string;
@@ -48,6 +53,8 @@ export interface UpdatePackageBody {
   price?: number;
   validityDays?: number;
   validityUnit?: "days" | "hours" | "hrs";
+  availableDuration?: number | null;
+  availableUnit?: "days" | "hours" | "hrs";
   applicableSystemTypeIds?: string[];
   dayOfWeek?: number[];
   startTime?: string;

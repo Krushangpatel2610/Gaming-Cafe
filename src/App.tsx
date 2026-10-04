@@ -734,6 +734,8 @@ function Dashboard() {
       price: number;
       validityDays: number;
       validityUnit?: "days" | "hours" | "hrs";
+      availableDuration?: number | null;
+      availableUnit?: "days" | "hours" | "hrs";
     },
     systemIds?: string[]
   ) => {
@@ -770,6 +772,8 @@ function Dashboard() {
       price: number;
       validityDays: number;
       validityUnit?: "days" | "hours" | "hrs";
+      availableDuration?: number | null;
+      availableUnit?: "days" | "hours" | "hrs";
     }
   ) => {
     if (!storeId) return;

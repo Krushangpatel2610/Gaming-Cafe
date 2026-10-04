@@ -36,9 +36,9 @@ interface GamepassViewProps {
   systems: SystemOption[];
   customers?: ApiCustomer[];
   storeId: string;
-  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs" }, systemIds?: string[]) => void;
+  onAddPackage: (data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs", availableDuration?: number | null, availableUnit?: "days" | "hours" | "hrs" }, systemIds?: string[]) => void;
   onUpdatePackageStatus: (packageId: string, isActive: boolean) => void;
-  onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs" }) => void;
+  onUpdatePackage: (packageId: string, data: { name: string, description?: string, durationMinutes: number, price: number, validityDays: number, validityUnit?: "days" | "hours" | "hrs", availableDuration?: number | null, availableUnit?: "days" | "hours" | "hrs" }) => void;
   onAssignSystem: (packageId: string, systemId: string) => Promise<void>;
   onUnassignSystem: (packageId: string, systemId: string) => Promise<void>;
   onNotify?: (message: string, type: "success" | "danger" | "info" | "warning") => void;
@@ -64,6 +64,8 @@ export default function GamepassView({
   const [newPrice, setNewPrice] = useState<number>(0);
   const [newValidityDays, setNewValidityDays] = useState<number>(7);
   const [newValidityUnit, setNewValidityUnit] = useState<"days" | "hours">("days");
+  const [newAvailableDuration, setNewAvailableDuration] = useState<string>("");
+  const [newAvailableUnit, setNewAvailableUnit] = useState<"days" | "hours">("days");
   const [newSystemIds, setNewSystemIds] = useState<Set<string>>(new Set());
 
   // Edit modal state
@@ -74,6 +76,8 @@ export default function GamepassView({
   const [editPrice, setEditPrice] = useState<number>(0);
   const [editValidityDays, setEditValidityDays] = useState<number>(7);
   const [editValidityUnit, setEditValidityUnit] = useState<"days" | "hours">("days");
+  const [editAvailableDuration, setEditAvailableDuration] = useState<string>("");
+  const [editAvailableUnit, setEditAvailableUnit] = useState<"days" | "hours">("days");
 
   // Station assignment modal state
   const [assignPackage, setAssignPackage] = useState<ApiGamepassPackage | null>(null);
@@ -91,6 +95,7 @@ export default function GamepassView({
 
   const handleAddPackageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const availDur = newAvailableDuration ? parseInt(newAvailableDuration) : undefined;
     onAddPackage({
       name: newName,
       description: newDescription || undefined,
@@ -98,6 +103,8 @@ export default function GamepassView({
       price: newPrice,
       validityDays: newValidityDays,
       validityUnit: newValidityUnit,
+      availableDuration: availDur,
+      availableUnit: availDur ? newAvailableUnit : undefined,
     }, newSystemIds.size > 0 ? Array.from(newSystemIds) : undefined);
     setShowAddModal(false);
     setNewName("");
@@ -106,6 +113,8 @@ export default function GamepassView({
     setNewPrice(0);
     setNewValidityDays(7);
     setNewValidityUnit("days");
+    setNewAvailableDuration("");
+    setNewAvailableUnit("days");
     setNewSystemIds(new Set());
   };
 
@@ -125,6 +134,8 @@ export default function GamepassView({
     setEditPrice(parseFloat(pkg.price));
     setEditValidityDays(pkg.validityDays);
     setEditValidityUnit(pkg.validityUnit === "hours" || pkg.validityUnit === "hrs" ? "hours" : "days");
+    setEditAvailableDuration(pkg.availableDuration != null ? String(pkg.availableDuration) : "");
+    setEditAvailableUnit(pkg.availableUnit === "hours" || pkg.availableUnit === "hrs" ? "hours" : "days");
   };
 
   const closeEditModal = () => {
@@ -134,6 +145,7 @@ export default function GamepassView({
   const handleEditPackageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editPackage) return;
+    const availDur = editAvailableDuration ? parseInt(editAvailableDuration) : undefined;
     onUpdatePackage(editPackage.id, {
       name: editName,
       description: editDescription || undefined,
@@ -141,6 +153,8 @@ export default function GamepassView({
       price: editPrice,
       validityDays: editValidityDays,
       validityUnit: editValidityUnit,
+      availableDuration: availDur,
+      availableUnit: availDur ? editAvailableUnit : undefined,
     });
     closeEditModal();
   };
@@ -504,6 +518,31 @@ export default function GamepassView({
               </div>
 
               <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Catalog Availability (optional)</label>
+                  <span className="text-[10px] text-slate-400">Available for purchase duration</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 30 (leave blank for always)"
+                    value={newAvailableDuration}
+                    onChange={(e) => setNewAvailableDuration(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                  <select
+                    value={newAvailableUnit}
+                    onChange={(e) => setNewAvailableUnit(e.target.value as "days" | "hours")}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-semibold cursor-pointer"
+                  >
+                    <option value="days">Days</option>
+                    <option value="hours">Hours (hrs)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Available on Specific PCs (optional)</label>
                 <p className="text-[10px] text-slate-400 mb-1">Leave all unchecked to make this pass available on every station.</p>
                 <div className="max-h-32 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-2 bg-slate-50">
@@ -620,6 +659,30 @@ export default function GamepassView({
                   <select
                     value={editValidityUnit}
                     onChange={(e) => setEditValidityUnit(e.target.value as "days" | "hours")}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-semibold cursor-pointer"
+                  >
+                    <option value="days">Days</option>
+                    <option value="hours">Hours (hrs)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Catalog Availability (optional)</label>
+                  <span className="text-[10px] text-slate-400">Available for purchase duration</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="e.g. 30 (leave blank for always)"
+                    value={editAvailableDuration}
+                    onChange={(e) => setEditAvailableDuration(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
+                  />
+                  <select
+                    value={editAvailableUnit}
+                    onChange={(e) => setEditAvailableUnit(e.target.value as "days" | "hours")}
                     className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-semibold cursor-pointer"
                   >
                     <option value="days">Days</option>

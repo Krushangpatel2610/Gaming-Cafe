@@ -53,7 +53,8 @@ export function joinStoreAsCustomer(storeId: string): Promise<ApiCustomer> {
 // needed before or after; this app has no customer session to hold.
 export interface CustomerSignupBody {
   name: string;
-  email: string;
+  username: string;
+  email?: string;
   password: string;
   phone?: string;
 }

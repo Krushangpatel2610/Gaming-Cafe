@@ -70,8 +70,8 @@ export default function GamerNav({
     },
     {
       id: "wallet",
-      label: "Wallet & Loyalty",
-      sublabel: "Credits & Reward Store",
+      label: "Cyber Wallet",
+      sublabel: "Credits & Top-Up",
       icon: Wallet
     },
     {
@@ -151,10 +151,10 @@ export default function GamerNav({
           <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
           <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold font-mono mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>VIP REWARDS</span>
+            <span>GAMEPASS ACCESS</span>
           </div>
           <p className="text-[11px] text-slate-300 leading-snug">
-            Play 5 hours this week to earn double bonus points.
+            Save more with hourly and multi-day passes for your favorite rigs.
           </p>
         </div>
       </aside>

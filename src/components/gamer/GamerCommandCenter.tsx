@@ -63,23 +63,6 @@ export default function GamerCommandCenter({
   const session = dashboard?.activeSession ?? null;
   const mostPlayed = dashboard?.mostPlayedGames ?? [];
 
-  // Gamer Rank Tier Calculation
-  const getRank = (pts: number) => {
-    if (pts >= 1500) {
-      return { title: "DIAMOND", level: 18, color: "from-cyan-500 to-blue-600", nextPts: 2500, perk: "15% Bonus Credits" };
-    }
-    if (pts >= 800) {
-      return { title: "PLATINUM", level: 12, color: "from-purple-500 to-pink-600", nextPts: 1500, perk: "10% Bonus Credits" };
-    }
-    if (pts >= 300) {
-      return { title: "GOLD", level: 7, color: "from-amber-500 to-yellow-600", nextPts: 800, perk: "5% Bonus Credits" };
-    }
-    return { title: "SILVER", level: 3, color: "from-slate-400 to-slate-600", nextPts: 300, perk: "Base Loyalty Rate" };
-  };
-
-  const rank = getRank(loyaltyBalance);
-  const xpProgress = Math.min(100, Math.round((loyaltyBalance / rank.nextPts) * 100));
-
   const handleExtendActiveSession = async (mins: number) => {
     if (!session || !storeId || extending) return;
     setExtending(true);
@@ -109,7 +92,7 @@ export default function GamerCommandCenter({
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/40 text-indigo-300">
-                ⭐ {rank.title} TIER · LVL {rank.level}
+                🎮 VERIFIED GAMER
               </span>
               <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -122,23 +105,8 @@ export default function GamerCommandCenter({
             </h2>
 
             <p className="text-xs sm:text-sm text-slate-400 font-sans max-w-xl leading-relaxed">
-              Your esports headquarters. Book high-refresh RTX rigs, unlock PCs via screen codes, manage your wallet credits, and redeem loyalty rewards.
+              Your esports headquarters. Book high-refresh RTX rigs, unlock PCs via screen codes, manage your wallet credits, and jump right into the game.
             </p>
-
-            {/* XP Progress to Next Tier */}
-            <div className="pt-2 max-w-md space-y-1.5">
-              <div className="flex justify-between text-[11px] font-mono text-slate-400">
-                <span>XP Progress to Next Perk</span>
-                <span className="text-indigo-300 font-bold">{loyaltyBalance} / {rank.nextPts} pts</span>
-              </div>
-              <div className="w-full h-2 rounded-full bg-slate-900 border border-white/[0.08] overflow-hidden p-0.5">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 transition-all duration-500"
-                  style={{ width: `${xpProgress}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-slate-500 font-mono">Current Perk: {rank.perk}</p>
-            </div>
           </div>
 
           {/* Quick Action Buttons */}
@@ -272,24 +240,24 @@ export default function GamerCommandCenter({
           </div>
         </div>
 
-        {/* Loyalty Points Card */}
+        {/* Gamer Pass / Status Card */}
         <button
           onClick={() => onSelectTab("wallet")}
-          className="rounded-2xl bg-gradient-to-br from-[#101426] to-[#0b0e1b] border border-white/[0.08] p-5 relative overflow-hidden shadow-xl text-left group hover:border-amber-500/30 transition-all"
+          className="rounded-2xl bg-gradient-to-br from-[#101426] to-[#0b0e1b] border border-white/[0.08] p-5 relative overflow-hidden shadow-xl text-left group hover:border-purple-500/30 transition-all"
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider">
-              Loyalty Points
+              Gamer Pass
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
+              <Zap className="w-4 h-4" />
             </div>
           </div>
-          <p className="text-2xl font-bold font-mono text-amber-400 mt-3">
-            {loyaltyBalance} <span className="text-xs text-slate-400 font-normal">pts</span>
+          <p className="text-xl font-bold font-mono text-white mt-3 truncate">
+            {session ? "In-Session" : "Ready to Play"}
           </p>
-          <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06] text-[11px] font-mono text-amber-300">
-            <span>Redeem Rewards</span>
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.06] text-[11px] font-mono text-purple-300">
+            <span>Manage Wallet</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </button>
@@ -500,7 +468,7 @@ export default function GamerCommandCenter({
             <p className="text-xs text-slate-300 mt-2 leading-relaxed">
               {activeCampaigns.length > 0 && activeCampaigns[0].description
                 ? activeCampaigns[0].description
-                : "Top up ₹500 or more to receive complimentary bonus credits and 2x loyalty points on all RTX rigs."}
+                : "Top up ₹500 or more to receive complimentary bonus credits on all RTX rigs."}
             </p>
           </div>
 

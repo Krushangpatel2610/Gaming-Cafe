@@ -118,6 +118,7 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
   const [selectedStore, setSelectedStore] = useState<ApiStore | null>(null);
 
   const [custName, setCustName] = useState<string>("");
+  const [custUsername, setCustUsername] = useState<string>("");
   const [custEmail, setCustEmail] = useState<string>("");
   const [custPhone, setCustPhone] = useState<string>("");
   const [custPassword, setCustPassword] = useState<string>("");
@@ -298,6 +299,14 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
     e.preventDefault();
     setError(null);
     if (!selectedStore) return;
+    if (!custUsername.trim()) {
+      setError("Username is required.");
+      return;
+    }
+    if (!custEmail.trim() && !custPhone.trim()) {
+      setError("Please provide at least an email address or a phone number.");
+      return;
+    }
     if (custPassword !== custConfirmPassword) {
       setError("Passwords don't match.");
       return;
@@ -313,9 +322,10 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
       // session for, so there's no token to manage afterward.
       await signupAsCustomer(selectedStore.id, {
         name: custName,
-        email: custEmail,
+        username: custUsername.trim(),
+        email: custEmail.trim() || undefined,
         password: custPassword,
-        phone: custPhone || undefined
+        phone: custPhone.trim() || undefined
       });
       setPhase("customer-done");
     } catch (err) {
@@ -331,6 +341,7 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
     setSelectedStore(null);
     setStoreSearch("");
     setCustName("");
+    setCustUsername("");
     setCustEmail("");
     setCustPhone("");
     setCustPassword("");
@@ -972,12 +983,27 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Email</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Username</label>
+                    <div className="relative">
+                      <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        required
+                        minLength={3}
+                        value={custUsername}
+                        onChange={(e) => setCustUsername(e.target.value)}
+                        className="w-full pl-10 pr-3 py-2.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 transition-all"
+                        placeholder="gamer_tag (unique)"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Email (Email or Phone required)</label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="email"
-                        required
                         value={custEmail}
                         onChange={(e) => setCustEmail(e.target.value)}
                         className="w-full pl-10 pr-3 py-2.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 transition-all"
@@ -988,7 +1014,7 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Phone (optional)</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Phone (Email or Phone required)</label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
@@ -996,7 +1022,7 @@ export default function SignupView({ onSwitchToLogin }: SignupViewProps) {
                         value={custPhone}
                         onChange={(e) => setCustPhone(e.target.value)}
                         className="w-full pl-10 pr-3 py-2.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 transition-all"
-                        placeholder="+15550001234"
+                        placeholder="e.g. 9876543210 or +919876543210"
                       />
                     </div>
                   </div>

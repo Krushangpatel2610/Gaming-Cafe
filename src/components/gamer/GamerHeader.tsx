@@ -52,15 +52,6 @@ export default function GamerHeader({
         .toUpperCase()
     : "GX";
 
-  const getRank = (pts: number) => {
-    if (pts >= 1500) return { title: "DIAMOND", text: "text-cyan-400" };
-    if (pts >= 800) return { title: "PLATINUM", text: "text-purple-400" };
-    if (pts >= 300) return { title: "GOLD", text: "text-amber-400" };
-    return { title: "SILVER", text: "text-slate-300" };
-  };
-
-  const rank = getRank(loyaltyPoints);
-
   return (
     <header className="sticky top-0 z-30 bg-[#090d16]/95 backdrop-blur-md border-b border-white/[0.08] px-4 sm:px-6 lg:px-8 py-3 transition-colors">
       <div className="flex items-center justify-between gap-4">
@@ -91,7 +82,7 @@ export default function GamerHeader({
             <p className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
               <span>PLAYER HQ</span>
               <span className="text-slate-600">/</span>
-              <span className="text-indigo-400 font-semibold">{rank.title} TIER</span>
+              <span className="text-indigo-400 font-semibold">ESPORTS ARENA</span>
             </p>
           </div>
         </div>
@@ -149,21 +140,6 @@ export default function GamerHeader({
             </span>
           </button>
 
-          {/* Loyalty Points Chip */}
-          <button
-            onClick={() => onSelectTab("wallet")}
-            className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800/90 border border-white/[0.08] hover:border-amber-500/30 transition-all text-left"
-          >
-            <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-400">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div className="text-right">
-              <p className="text-[9px] font-mono text-slate-400 leading-none">POINTS</p>
-              <p className="text-xs font-bold text-amber-400 font-mono mt-0.5">
-                {loyaltyPoints}
-              </p>
-            </div>
-          </button>
 
           {/* Notifications Button */}
           <button

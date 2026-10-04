@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Gamepad2, Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2,
-  Loader2, ArrowLeft, KeyRound,
+  Loader2, ArrowLeft, KeyRound, User,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { adminRequestPasswordReset, adminConfirmPasswordReset } from "../api/auth";
@@ -177,17 +177,17 @@ export default function LoginView({ onSwitchToSignup }: LoginViewProps) {
 
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
-                        Email
+                        Username, Email, or Phone
                       </label>
                       <div className="relative">
-                        <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                         <input
                           type="text"
                           required
                           value={identifier}
                           onChange={(e) => setIdentifier(e.target.value)}
                           className="w-full pl-10 pr-3 py-2.5 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 transition-all"
-                          placeholder="you@yourlounge.com"
+                          placeholder="Username, email, or phone number"
                           autoComplete="username"
                         />
                       </div>
