@@ -13,6 +13,7 @@ export interface ApiGuestAccessRequest {
   adminEmail: string | null;
   status: GuestAccessStatus;
   sessionId: string | null;
+  allocatedMinutes: number | null;
   expiresAt: string;
   redeemedAt: string | null;
   createdAt: string;
@@ -24,6 +25,7 @@ export interface GenerateGuestOtpResponse {
   systemName: string;
   expiresInSeconds: number;
   expiresAt: string;
+  allocatedMinutes?: number | null;
 }
 
 export interface ListGuestRequestsParams {
@@ -35,10 +37,12 @@ export interface ListGuestRequestsParams {
 
 export function generateGuestOtp(
   storeId: string,
-  systemId: string
+  systemId: string,
+  hours?: number
 ): Promise<GenerateGuestOtpResponse> {
   return apiPost<GenerateGuestOtpResponse>(
-    `/stores/${storeId}/guest-access/systems/${systemId}/request`
+    `/stores/${storeId}/guest-access/systems/${systemId}/request`,
+    hours !== undefined ? { hours } : {}
   );
 }
 

@@ -50,6 +50,9 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
   const [activeCode, setActiveCode] = useState<GenerateGuestOtpResponse | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
   const [now, setNow] = useState<number>(Date.now());
+  const [selectedHours, setSelectedHours] = useState<number>(2);
+  const [isCustomHours, setIsCustomHours] = useState<boolean>(false);
+  const [customHoursInput, setCustomHoursInput] = useState<string>("2");
 
   // Available systems from pcs prop
   const availablePcs = pcs.filter((pc) => pc.status === PCStatus.AVAILABLE);
@@ -104,12 +107,14 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
       return;
     }
 
+    const hoursToPass = isCustomHours ? (parseFloat(customHoursInput) || 2) : selectedHours;
+
     setGenerating(true);
     try {
-      const result = await generateGuestOtp(storeId, selectedSystemId);
+      const result = await generateGuestOtp(storeId, selectedSystemId, hoursToPass);
       setActiveCode(result);
       setCopied(false);
-      onNotify?.(`Guest code generated for ${result.systemName}!`, "success");
+      onNotify?.(`Guest code generated for ${result.systemName} (${hoursToPass}h)!`, "success");
       await fetchRequests();
     } catch (err) {
       onNotify?.(
@@ -221,6 +226,63 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
                 </select>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Playtime Duration (Hours)
+                </label>
+                <div className="grid grid-cols-5 gap-1.5 mb-2">
+                  {[1, 2, 3, 4].map((hrs) => (
+                    <button
+                      key={hrs}
+                      type="button"
+                      onClick={() => {
+                        setSelectedHours(hrs);
+                        setIsCustomHours(false);
+                      }}
+                      className={`py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                        !isCustomHours && selectedHours === hrs
+                          ? "bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-100"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {hrs} hr{hrs > 1 ? "s" : ""}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomHours(true);
+                    }}
+                    className={`py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
+                      isCustomHours
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-100"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    Custom
+                  </button>
+                </div>
+
+                {isCustomHours && (
+                  <div className="flex items-center space-x-2 mt-2">
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="24"
+                      step="0.5"
+                      value={customHoursInput}
+                      onChange={(e) => setCustomHoursInput(e.target.value)}
+                      placeholder="e.g. 1.5, 5"
+                      className="w-28 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-slate-500 font-medium">hours of playtime</span>
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  The guest will receive this playtime by default upon kiosk login with no top-up message.
+                </p>
+              </div>
+
               {selectedPC && !isSelectedPCAvailable && (
                 <div className="flex items-center space-x-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
                   <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
@@ -265,9 +327,16 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
                 <span>Active Guest Pass</span>
               </h2>
               {activeCode && (
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {activeCode.systemName}
-                </span>
+                <div className="flex items-center space-x-2">
+                  {activeCode.allocatedMinutes ? (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {(activeCode.allocatedMinutes / 60).toFixed(1).replace(/\.0$/, "")}h Playtime
+                    </span>
+                  ) : null}
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {activeCode.systemName}
+                  </span>
+                </div>
               )}
             </div>
 
@@ -392,6 +461,7 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
                 <th className="px-6 py-3.5">Terminal</th>
                 <th className="px-6 py-3.5">Code</th>
                 <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5">Playtime</th>
                 <th className="px-6 py-3.5">Origin / Issuer</th>
                 <th className="px-6 py-3.5">Generated At</th>
                 <th className="px-6 py-3.5">Redeemed At</th>
@@ -401,18 +471,18 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
             <tbody className="divide-y divide-slate-100 font-medium">
               {loading && requests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
                     <span>Loading guest requests...</span>
                   </td>
                 </tr>
               ) : filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     <KeyRound className="w-8 h-8 mx-auto mb-2 text-slate-300 stroke-[1.5]" />
                     <p className="font-semibold text-slate-600">No guest requests found</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      No codes match the selected criteria or none have been issued yet.
+                       No codes match the selected criteria or none have been issued yet.
                     </p>
                   </td>
                 </tr>
@@ -463,6 +533,16 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
                         )}
                       </td>
                       <td className="px-6 py-3.5">
+                        {req.allocatedMinutes ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-md font-mono font-bold text-xs bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            <Clock className="w-3 h-3 text-indigo-500" />
+                            <span>{(req.allocatedMinutes / 60).toFixed(1).replace(/\.0$/, "")}h</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5">
                         {req.adminName ? (
                           <div>
                             <span className="font-bold text-slate-800">{req.adminName}</span>
@@ -503,6 +583,7 @@ export default function GuestAccessView({ pcs, onNotify }: GuestAccessViewProps)
                                 systemName: req.systemName,
                                 expiresInSeconds: cd.diffSeconds,
                                 expiresAt: req.expiresAt,
+                                allocatedMinutes: req.allocatedMinutes,
                               })
                             }
                             className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
