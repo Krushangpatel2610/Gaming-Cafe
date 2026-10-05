@@ -98,6 +98,8 @@ export default function LivePCsView({ currency, pcs,
   // reveals a rate input; submitting creates a one-off system type for it.
   const [editPCId, setEditPCId] = useState<string | null>(null);
   const [editName, setEditName] = useState<string>("");
+  const [editStationNumber, setEditStationNumber] = useState<string>("");
+  const [editPlatform, setEditPlatform] = useState<ApiSystemPlatform>("pc");
   const [editSystemTypeId, setEditSystemTypeId] = useState<string>("");
   const [editCustomRate, setEditCustomRate] = useState<string>("");
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
@@ -300,6 +302,8 @@ export default function LivePCsView({ currency, pcs,
   const handleEditClick = (pc: PC) => {
     setEditPCId(pc.id);
     setEditName(pc.name);
+    setEditStationNumber(pc.stationNumber != null ? String(pc.stationNumber) : "");
+    setEditPlatform((pc.platform as ApiSystemPlatform) || "pc");
     setEditSystemTypeId(pc.systemTypeId || "");
     setEditCustomRate("");
   };
@@ -324,7 +328,13 @@ export default function LivePCsView({ currency, pcs,
       systemTypeId = newTypeId;
     }
 
-    const ok = await onEditSystem(editPCId, { name: editName, systemTypeId });
+    const stationNumber = editStationNumber.trim() ? parseInt(editStationNumber, 10) : undefined;
+    const ok = await onEditSystem(editPCId, {
+      name: editName,
+      systemTypeId,
+      platform: editPlatform,
+      ...(stationNumber ? { stationNumber } : {}),
+    });
     setEditSubmitting(false);
     if (ok) setEditPCId(null);
   };
@@ -897,7 +907,7 @@ export default function LivePCsView({ currency, pcs,
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 font-display">Edit Terminal</h3>
-                <p className="text-xs text-slate-400 mt-1">Update {editPC?.name}'s name and pricing tier.</p>
+                <p className="text-xs text-slate-400 mt-1">Update {editPC?.name}'s name, station number, platform and pricing tier.</p>
               </div>
               <button onClick={() => setEditPCId(null)} className="text-slate-400 hover:text-slate-700">
                 <X className="w-4 h-4" />
@@ -913,6 +923,33 @@ export default function LivePCsView({ currency, pcs,
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Station Number</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    value={editStationNumber}
+                    onChange={(e) => setEditStationNumber(e.target.value)}
+                    placeholder="e.g. 4"
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Platform</label>
+                  <select
+                    value={editPlatform}
+                    onChange={(e) => setEditPlatform(e.target.value as ApiSystemPlatform)}
+                    className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none appearance-none cursor-pointer uppercase"
+                  >
+                    {PLATFORMS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1">

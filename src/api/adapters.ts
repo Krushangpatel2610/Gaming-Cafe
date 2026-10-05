@@ -89,6 +89,8 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
       : system.currentSession?.userName || (system.currentSession ? "Guest" : undefined),
     timeRemaining,
     systemTypeId: system.systemTypeId,
+    stationNumber: system.stationNumber != null && system.stationNumber !== "" ? Number(system.stationNumber) : null,
+    platform: system.platform ?? null,
     targetCapMinutes: targetCap,
     capChoiceMade: capChoiceMade,
   };

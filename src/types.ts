@@ -33,6 +33,8 @@ export interface PC {
   // Real backend link to this PC's System Type — hourly rate lives there
   // (ApiSystemType.hourlyBaseRate), not on a fixed per-group settings value.
   systemTypeId?: string;
+  stationNumber?: number | null;
+  platform?: string | null;
   targetCapMinutes?: number | null;
   capChoiceMade?: boolean;
 }

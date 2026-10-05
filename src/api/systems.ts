@@ -32,7 +32,7 @@ export function createSystem(
 
 export interface UpdateSystemBody {
   name?: string;
-  stationNumber?: string;
+  stationNumber?: number;
   platform?: ApiSystemPlatform;
   systemTypeId?: string;
   ipAddress?: string;
