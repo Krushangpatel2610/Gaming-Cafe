@@ -1,8 +1,13 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle, Sparkles, Loader2, RefreshCw } from "lucide-react";
-import { listPendingPurchases, confirmPurchase, rejectPurchase, ApiGamepassPurchase } from "../api/gamepass";
+import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle, Sparkles, Loader2, RefreshCw, Layers } from "lucide-react";
+import {
+  listGamepassOrders,
+  confirmGamepassOrder,
+  rejectGamepassOrder,
+  ApiGamepassOrder,
+} from "../api/gamepass";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from "../api/payments";
@@ -48,10 +53,10 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const [rejectReason, setRejectReason] = useState<string>("");
   const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const [gamepassRequests, setGamepassRequests] = useState<ApiGamepassPurchase[]>([]);
-  const [rejectGamepassTarget, setRejectGamepassTarget] = useState<ApiGamepassPurchase | null>(null);
-  const [rejectGamepassReason, setRejectGamepassReason] = useState<string>("");
-  const [processingGamepassId, setProcessingGamepassId] = useState<string | null>(null);
+  const [gamepassOrders, setGamepassOrders] = useState<ApiGamepassOrder[]>([]);
+  const [rejectOrderTarget, setRejectOrderTarget] = useState<ApiGamepassOrder | null>(null);
+  const [rejectOrderReason, setRejectOrderReason] = useState<string>("");
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
   const canRecord = admin?.role === "super_admin" || admin?.role === "admin";
   const canRefund = admin?.role === "super_admin";
@@ -67,44 +72,44 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
     }
   };
 
-  const refreshGamepassRequests = async () => {
+  const refreshGamepassOrders = async () => {
     if (!storeId) return;
     try {
-      const { data } = await listPendingPurchases(storeId);
-      setGamepassRequests(data);
+      const { data } = await listGamepassOrders(storeId, { status: "pending" });
+      setGamepassOrders(data);
     } catch (err) {
       // Non-fatal background fetch
     }
   };
 
-  const handleConfirmGamepass = async (req: ApiGamepassPurchase) => {
+  const handleConfirmOrder = async (order: ApiGamepassOrder) => {
     if (!storeId) return;
-    setProcessingGamepassId(req.id);
+    setProcessingOrderId(order.id);
     try {
-      await confirmPurchase(storeId, req.id);
-      onNotify(`Confirmed gamepass purchase for ${req.package?.name || "Player"}.`, "success");
-      await refreshGamepassRequests();
+      await confirmGamepassOrder(storeId, order.id);
+      onNotify(`Confirmed gamepass order (${order.itemCount} pass${order.itemCount > 1 ? 'es' : ''}) for ${formatCurrency(parseFloat(order.totalAmount).toFixed(2), currency)}.`, "success");
+      await refreshGamepassOrders();
     } catch (err) {
-      onNotify(`Failed to confirm gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      onNotify(`Failed to confirm order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     } finally {
-      setProcessingGamepassId(null);
+      setProcessingOrderId(null);
     }
   };
 
-  const handleRejectGamepassSubmit = async (e: React.FormEvent) => {
+  const handleRejectOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!storeId || !rejectGamepassTarget) return;
-    setProcessingGamepassId(rejectGamepassTarget.id);
+    if (!storeId || !rejectOrderTarget) return;
+    setProcessingOrderId(rejectOrderTarget.id);
     try {
-      await rejectPurchase(storeId, rejectGamepassTarget.id, rejectGamepassReason);
-      onNotify("Gamepass request rejected.", "info");
-      setRejectGamepassTarget(null);
-      setRejectGamepassReason("");
-      await refreshGamepassRequests();
+      await rejectGamepassOrder(storeId, rejectOrderTarget.id, rejectOrderReason);
+      onNotify("Gamepass order rejected.", "info");
+      setRejectOrderTarget(null);
+      setRejectOrderReason("");
+      await refreshGamepassOrders();
     } catch (err) {
-      onNotify(`Failed to reject gamepass: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      onNotify(`Failed to reject gamepass order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     } finally {
-      setProcessingGamepassId(null);
+      setProcessingOrderId(null);
     }
   };
 
@@ -141,10 +146,10 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   useEffect(() => {
     if (!storeId) return;
     refreshTopupRequests();
-    refreshGamepassRequests();
+    refreshGamepassOrders();
     const interval = setInterval(() => {
       refreshTopupRequests();
-      refreshGamepassRequests();
+      refreshGamepassOrders();
     }, 8000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -294,66 +299,84 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
         </div>
       )}
 
-      {/* Pending Gamepass requests — player-submitted, needs staff confirm/reject */}
-      {canReviewTopups && gamepassRequests.length > 0 && (
+      {/* Pending Gamepass Orders — player-submitted, needs staff confirm/reject */}
+      {canReviewTopups && gamepassOrders.length > 0 && (
         <div className="bg-white rounded-xl border border-indigo-200 shadow-precision overflow-hidden">
           <div className="px-4 py-3 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              <h3 className="text-sm font-bold text-indigo-900">Pending Gamepass Purchases ({gamepassRequests.length})</h3>
+              <h3 className="text-sm font-bold text-indigo-900">Pending Gamepass Orders ({gamepassOrders.length})</h3>
             </div>
             <button
-              onClick={refreshGamepassRequests}
+              onClick={refreshGamepassOrders}
               className="p-1 hover:bg-indigo-100 rounded text-indigo-600 transition-colors"
-              title="Refresh gamepass requests"
+              title="Refresh gamepass orders"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="divide-y divide-slate-50">
-            {gamepassRequests.map((req) => {
-              const cust = customers.find((c) => c.userId === req.userId);
-              const pkgName = req.package?.name || "Gamepass Package";
-              const price = req.package?.price ? parseFloat(req.package.price).toFixed(2) : "0.00";
+          <div className="divide-y divide-slate-100">
+            {gamepassOrders.map((order) => {
+              const cust = customers.find((c) => c.userId === order.userId);
+              const price = parseFloat(order.totalAmount).toFixed(2);
               return (
-                <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
+                <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
+                  <div className="min-w-0 space-y-2">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                        {pkgName}
+                      <span className="font-mono font-bold text-slate-900 text-base">
+                        {formatCurrency(price, currency)}
                       </span>
-                      <p className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(price, currency)}</p>
-                      <span className="text-xs text-slate-500 font-medium">
-                        {cust?.name || cust?.phone || `Player ${req.userId.slice(0, 8)}`}
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                        {order.itemCount} pass{order.itemCount > 1 ? 'es' : ''}
+                      </span>
+                      <span className="text-xs text-slate-600 font-medium">
+                        {cust?.name || cust?.phone || `Player ${order.userId.slice(0, 8)}`}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        · {new Date(order.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                      {new Date(req.createdAt).toLocaleString()}
-                    </p>
+
+                    {/* Breakdown of items in this order */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {order.items.map((item, idx) => (
+                        <span
+                          key={item.id || idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 shadow-sm"
+                        >
+                          <span className="font-semibold">{item.packageName}</span>
+                          <span className="text-slate-400 font-mono text-[11px]">&#8377;{parseFloat(item.price).toFixed(0)}</span>
+                          <span className="text-[10px] text-indigo-600 font-medium font-mono">
+                            ({item.durationMinutes}m)
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                     <button
-                      onClick={() => handleConfirmGamepass(req)}
-                      disabled={processingGamepassId === req.id}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
+                      onClick={() => handleConfirmOrder(order)}
+                      disabled={processingOrderId === order.id}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
                     >
-                      {processingGamepassId === req.id ? (
+                      {processingOrderId === order.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <Check className="w-3.5 h-3.5" />
                       )}
-                      Confirm
+                      <span>Approve Order</span>
                     </button>
                     <button
                       onClick={() => {
-                        setRejectGamepassTarget(req);
-                        setRejectGamepassReason("");
+                        setRejectOrderTarget(order);
+                        setRejectOrderReason("");
                       }}
-                      disabled={processingGamepassId === req.id}
-                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
+                      disabled={processingOrderId === order.id}
+                      className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-100 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
                     >
                       <XCircle className="w-3.5 h-3.5" />
-                      Reject
+                      <span>Reject</span>
                     </button>
                   </div>
                 </div>
@@ -511,8 +534,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
         </div>
       )}
 
-      {/* MODAL: Reject Gamepass Request */}
-      {rejectGamepassTarget && (
+      {/* MODAL: Reject Gamepass Order */}
+      {rejectOrderTarget && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
@@ -520,18 +543,18 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden"
           >
             <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-base font-bold text-slate-900 font-display">Reject Gamepass Request</h3>
-              <p className="text-xs text-slate-400 mt-1">Please provide a reason for rejecting this purchase.</p>
+              <h3 className="text-base font-bold text-slate-900 font-display">Reject Gamepass Order</h3>
+              <p className="text-xs text-slate-400 mt-1">Please provide a reason for rejecting this order of {rejectOrderTarget.itemCount} pass{rejectOrderTarget.itemCount > 1 ? 'es' : ''}.</p>
             </div>
-            <form onSubmit={handleRejectGamepassSubmit} className="p-5 space-y-4">
+            <form onSubmit={handleRejectOrderSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Reason</label>
                 <input
                   type="text"
                   required
                   minLength={3}
-                  value={rejectGamepassReason}
-                  onChange={(e) => setRejectGamepassReason(e.target.value)}
+                  value={rejectOrderReason}
+                  onChange={(e) => setRejectOrderReason(e.target.value)}
                   placeholder="e.g. Payment not received on UPI"
                   className="w-full mt-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-red-500 focus:bg-white transition-all"
                 />
@@ -540,8 +563,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                 <button
                   type="button"
                   onClick={() => {
-                    setRejectGamepassTarget(null);
-                    setRejectGamepassReason("");
+                    setRejectOrderTarget(null);
+                    setRejectOrderReason("");
                   }}
                   className="flex-1 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-xs font-semibold transition-all"
                 >
@@ -549,10 +572,10 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                 </button>
                 <button
                   type="submit"
-                  disabled={processingGamepassId === rejectGamepassTarget.id}
+                  disabled={processingOrderId === rejectOrderTarget.id}
                   className="flex-1 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-red-500/10 flex items-center justify-center gap-1"
                 >
-                  {processingGamepassId === rejectGamepassTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {processingOrderId === rejectOrderTarget.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   <span>Reject</span>
                 </button>
               </div>

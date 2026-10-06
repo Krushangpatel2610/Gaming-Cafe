@@ -26,13 +26,15 @@ import {
   Pencil,
   Gamepad2,
   Check,
-  Loader2
+  Loader2,
+  AppWindow
 } from "lucide-react";
 import { PC, PCStatus, PCGroup } from "../types";
 import { ApiCustomer, ApiSystemType, ApiSystemPlatform } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { CreateSystemBody, UpdateSystemBody } from "../api/systems";
 import { listStationGames, installGame, uninstallGame, StationGame } from "../api/games";
+import { listStationApps, installApp, uninstallApp, StationApp } from "../api/apps";
 
 interface LivePCsViewProps {
   currency: string;
@@ -116,7 +118,8 @@ export default function LivePCsView({ currency, pcs,
   const [extendSessionPCId, setExtendSessionPCId] = useState<string | null>(null);
   const [additionalMinutes, setAdditionalMinutes] = useState<number>(30);
 
-  // Station Games modal state (station-specific paths & game installation)
+  // Station Games & Apps modal state (station-specific paths & installation)
+  const [stationModalTab, setStationModalTab] = useState<"games" | "apps">("games");
   const [stationGamesPC, setStationGamesPC] = useState<PC | null>(null);
   const [stationGames, setStationGames] = useState<StationGame[]>([]);
   const [loadingStationGames, setLoadingStationGames] = useState<boolean>(false);
@@ -124,26 +127,45 @@ export default function LivePCsView({ currency, pcs,
   const [savingStationGameId, setSavingStationGameId] = useState<string | null>(null);
   const [stationGamePaths, setStationGamePaths] = useState<Record<string, string>>({});
 
+  const [stationApps, setStationApps] = useState<StationApp[]>([]);
+  const [loadingStationApps, setLoadingStationApps] = useState<boolean>(false);
+  const [savingStationAppId, setSavingStationAppId] = useState<string | null>(null);
+  const [stationAppPaths, setStationAppPaths] = useState<Record<string, string>>({});
+
   const openStationGamesModal = async (pc: PC) => {
     setStationGamesPC(pc);
+    setStationModalTab("games");
     setLoadingStationGames(true);
+    setLoadingStationApps(true);
     setStationGamesSearch("");
     if (storeId) {
       try {
-        const games = await listStationGames(storeId, pc.id);
+        const [games, apps] = await Promise.all([
+          listStationGames(storeId, pc.id).catch(e => { console.error(e); return [] as StationGame[]; }),
+          listStationApps(storeId, pc.id).catch(e => { console.error(e); return [] as StationApp[]; })
+        ]);
         setStationGames(games);
-        const paths: Record<string, string> = {};
+        const gPaths: Record<string, string> = {};
         games.forEach(g => {
-          paths[g.id] = g.executablePath || "";
+          gPaths[g.id] = g.executablePath || "";
         });
-        setStationGamePaths(paths);
+        setStationGamePaths(gPaths);
+
+        setStationApps(apps);
+        const aPaths: Record<string, string> = {};
+        apps.forEach(a => {
+          aPaths[a.id] = a.executablePath || "";
+        });
+        setStationAppPaths(aPaths);
       } catch (err) {
-        console.error("Failed to load station games:", err);
+        console.error("Failed to load station games/apps:", err);
       } finally {
         setLoadingStationGames(false);
+        setLoadingStationApps(false);
       }
     } else {
       setLoadingStationGames(false);
+      setLoadingStationApps(false);
     }
   };
 
@@ -177,6 +199,39 @@ export default function LivePCsView({ currency, pcs,
       console.error("Failed to save station executable path:", err);
     } finally {
       setSavingStationGameId(null);
+    }
+  };
+
+  const handleToggleStationApp = async (app: StationApp) => {
+    if (!storeId || !stationGamesPC) return;
+    setSavingStationAppId(app.id);
+    try {
+      if (app.isInstalled) {
+        await uninstallApp(storeId, stationGamesPC.id, app.id);
+        setStationApps(prev => prev.map(a => a.id === app.id ? { ...a, isInstalled: false } : a));
+      } else {
+        const path = stationAppPaths[app.id]?.trim() || null;
+        await installApp(storeId, stationGamesPC.id, app.id, path);
+        setStationApps(prev => prev.map(a => a.id === app.id ? { ...a, isInstalled: true, executablePath: path } : a));
+      }
+    } catch (err) {
+      console.error("Failed to update station app installation:", err);
+    } finally {
+      setSavingStationAppId(null);
+    }
+  };
+
+  const handleSaveStationAppPath = async (appId: string) => {
+    if (!storeId || !stationGamesPC) return;
+    setSavingStationAppId(appId);
+    try {
+      const path = stationAppPaths[appId]?.trim() || null;
+      await installApp(storeId, stationGamesPC.id, appId, path);
+      setStationApps(prev => prev.map(a => a.id === appId ? { ...a, isInstalled: true, executablePath: path } : a));
+    } catch (err) {
+      console.error("Failed to save station app executable path:", err);
+    } finally {
+      setSavingStationAppId(null);
     }
   };
 
@@ -643,10 +698,10 @@ export default function LivePCsView({ currency, pcs,
                   <button
                     onClick={() => openStationGamesModal(pc)}
                     className="px-2 py-1 bg-white hover:bg-indigo-50 border border-slate-200 text-slate-600 hover:text-indigo-700 rounded text-[10px] font-bold flex items-center space-x-1"
-                    title="Manage installed games & executable paths for this station"
+                    title="Manage installed games, apps & executable paths for this station"
                   >
                     <Gamepad2 className="w-3 h-3 text-indigo-600" />
-                    <span>Games</span>
+                    <span>Games &amp; Apps</span>
                   </button>
                   {canManageHardware && (
                     <>
@@ -1204,7 +1259,7 @@ export default function LivePCsView({ currency, pcs,
           </motion.div>
         </div>
       )}
-      {/* MODAL: Manage Station Games & Executable Paths */}
+      {/* MODAL: Manage Station Games, Apps & Executable Paths */}
       {stationGamesPC && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <motion.div
@@ -1216,10 +1271,10 @@ export default function LivePCsView({ currency, pcs,
               <div>
                 <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
                   <Gamepad2 className="w-4 h-4 text-indigo-600" />
-                  Station Games &amp; Paths — {stationGamesPC.name}
+                  Station Games &amp; Apps — {stationGamesPC.name}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure which games are installed on this station and their local executable path on this machine.
+                  Configure which games and apps are installed on this station and their local executable path on this machine.
                 </p>
               </div>
               <button
@@ -1231,12 +1286,40 @@ export default function LivePCsView({ currency, pcs,
               </button>
             </div>
 
+            {/* Modal Tabs */}
+            <div className="flex border-b border-slate-200 bg-slate-50 px-5 pt-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setStationModalTab("games")}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all ${
+                  stationModalTab === "games"
+                    ? "bg-white text-indigo-600 border-indigo-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800 border-transparent"
+                }`}
+              >
+                <Gamepad2 className="w-3.5 h-3.5" />
+                <span>Games ({stationGames.filter(g => g.isInstalled).length}/{stationGames.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStationModalTab("apps")}
+                className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all ${
+                  stationModalTab === "apps"
+                    ? "bg-white text-indigo-600 border-indigo-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800 border-transparent"
+                }`}
+              >
+                <AppWindow className="w-3.5 h-3.5" />
+                <span>Apps ({stationApps.filter(a => a.isInstalled).length}/{stationApps.length})</span>
+              </button>
+            </div>
+
             <div className="p-4 border-b border-slate-100 bg-white">
               <div className="relative">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
-                  placeholder="Filter games by title or genre..."
+                  placeholder={`Filter ${stationModalTab} by name or category...`}
                   value={stationGamesSearch}
                   onChange={(e) => setStationGamesSearch(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-sans"
@@ -1245,106 +1328,210 @@ export default function LivePCsView({ currency, pcs,
             </div>
 
             <div className="p-5 overflow-y-auto space-y-3 flex-1">
-              {loadingStationGames ? (
-                <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
-                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-                  <span className="text-xs">Loading games for this station...</span>
-                </div>
-              ) : stationGames.length === 0 ? (
-                <div className="text-center py-10 text-xs text-slate-400">
-                  No games found in the game library. Add games in the Game Library tab first.
-                </div>
-              ) : (
-                stationGames
-                  .filter(g =>
-                    g.name.toLowerCase().includes(stationGamesSearch.toLowerCase()) ||
-                    (g.genre && g.genre.toLowerCase().includes(stationGamesSearch.toLowerCase()))
-                  )
-                  .map(game => {
-                    const isSaving = savingStationGameId === game.id;
-                    const path = stationGamePaths[game.id] ?? (game.executablePath || "");
+              {stationModalTab === "games" ? (
+                loadingStationGames ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                    <span className="text-xs">Loading games for this station...</span>
+                  </div>
+                ) : stationGames.length === 0 ? (
+                  <div className="text-center py-10 text-xs text-slate-400">
+                    No games found in the game library. Add games in the Game Library tab first.
+                  </div>
+                ) : (
+                  stationGames
+                    .filter(g =>
+                      g.name.toLowerCase().includes(stationGamesSearch.toLowerCase()) ||
+                      (g.genre && g.genre.toLowerCase().includes(stationGamesSearch.toLowerCase()))
+                    )
+                    .map(game => {
+                      const isSaving = savingStationGameId === game.id;
+                      const path = stationGamePaths[game.id] ?? (game.executablePath || "");
 
-                    return (
-                      <div
-                        key={game.id}
-                        className={`p-3.5 rounded-lg border transition-all ${
-                          game.isInstalled
-                            ? "bg-white border-indigo-200 shadow-sm"
-                            : "bg-slate-50/50 border-slate-200 opacity-80"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <input
-                              type="checkbox"
-                              id={`station-game-${game.id}`}
-                              checked={game.isInstalled}
-                              onChange={() => handleToggleStationGame(game)}
-                              disabled={isSaving}
-                              className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <label
-                              htmlFor={`station-game-${game.id}`}
-                              className="text-xs font-bold text-slate-900 cursor-pointer truncate"
-                            >
-                              {game.name}
-                            </label>
-                            {game.genre && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
-                                {game.genre}
-                              </span>
-                            )}
-                          </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            game.isInstalled ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
-                          }`}>
-                            {game.isInstalled ? "Installed" : "Not Installed"}
-                          </span>
-                        </div>
-
-                        {/* Station Path Input */}
-                        <div className="pl-6.5 mt-2 space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center justify-between">
-                            <span>Station Executable Path</span>
-                            <span className="text-[10px] text-slate-400 font-normal">Press Enter or click Save</span>
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={path}
-                              placeholder="e.g. C:\Games\Valorant\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe"
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setStationGamePaths(prev => ({ ...prev, [game.id]: val }));
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleSaveStationGamePath(game.id);
-                                }
-                              }}
-                              disabled={isSaving}
-                              className="flex-1 px-3 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() => handleSaveStationGamePath(game.id)}
-                              disabled={isSaving}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shrink-0 disabled:opacity-50"
-                            >
-                              {isSaving ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Check className="w-3.5 h-3.5" />
+                      return (
+                        <div
+                          key={game.id}
+                          className={`p-3.5 rounded-lg border transition-all ${
+                            game.isInstalled
+                              ? "bg-white border-indigo-200 shadow-sm"
+                              : "bg-slate-50/50 border-slate-200 opacity-80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <input
+                                type="checkbox"
+                                id={`station-game-${game.id}`}
+                                checked={game.isInstalled}
+                                onChange={() => handleToggleStationGame(game)}
+                                disabled={isSaving}
+                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                              />
+                              <label
+                                htmlFor={`station-game-${game.id}`}
+                                className="text-xs font-bold text-slate-900 cursor-pointer truncate"
+                              >
+                                {game.name}
+                              </label>
+                              {game.genre && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                                  {game.genre}
+                                </span>
                               )}
-                              <span>Save</span>
-                            </button>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              game.isInstalled ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                            }`}>
+                              {game.isInstalled ? "Installed" : "Not Installed"}
+                            </span>
+                          </div>
+
+                          {/* Station Path Input */}
+                          <div className="pl-6.5 mt-2 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center justify-between">
+                              <span>Station Executable Path</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Press Enter or click Save</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={path}
+                                placeholder="e.g. C:\Games\Valorant\live\ShooterGame\Binaries\Win64\VALORANT-Win64-Shipping.exe"
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setStationGamePaths(prev => ({ ...prev, [game.id]: val }));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveStationGamePath(game.id);
+                                  }
+                                }}
+                                disabled={isSaving}
+                                className="flex-1 px-3 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => handleSaveStationGamePath(game.id)}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shrink-0 disabled:opacity-50"
+                              >
+                                {isSaving ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5" />
+                                )}
+                                <span>Save</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
+                )
+              ) : (
+                loadingStationApps ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+                    <span className="text-xs">Loading apps for this station...</span>
+                  </div>
+                ) : stationApps.length === 0 ? (
+                  <div className="text-center py-10 text-xs text-slate-400">
+                    No apps found in the app library. Add apps in the Apps tab first.
+                  </div>
+                ) : (
+                  stationApps
+                    .filter(a =>
+                      a.name.toLowerCase().includes(stationGamesSearch.toLowerCase()) ||
+                      (a.category && a.category.toLowerCase().includes(stationGamesSearch.toLowerCase()))
+                    )
+                    .map(app => {
+                      const isSaving = savingStationAppId === app.id;
+                      const path = stationAppPaths[app.id] ?? (app.executablePath || "");
+
+                      return (
+                        <div
+                          key={app.id}
+                          className={`p-3.5 rounded-lg border transition-all ${
+                            app.isInstalled
+                              ? "bg-white border-indigo-200 shadow-sm"
+                              : "bg-slate-50/50 border-slate-200 opacity-80"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div className="flex items-center space-x-2.5 min-w-0">
+                              <input
+                                type="checkbox"
+                                id={`station-app-${app.id}`}
+                                checked={app.isInstalled}
+                                onChange={() => handleToggleStationApp(app)}
+                                disabled={isSaving}
+                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                              />
+                              <label
+                                htmlFor={`station-app-${app.id}`}
+                                className="text-xs font-bold text-slate-900 cursor-pointer truncate"
+                              >
+                                {app.name}
+                              </label>
+                              {app.category && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono">
+                                  {app.category}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              app.isInstalled ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-500"
+                            }`}>
+                              {app.isInstalled ? "Installed" : "Not Installed"}
+                            </span>
+                          </div>
+
+                          {/* Station Path Input */}
+                          <div className="pl-6.5 mt-2 space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center justify-between">
+                              <span>Station Executable Path</span>
+                              <span className="text-[10px] text-slate-400 font-normal">Press Enter or click Save</span>
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={path}
+                                placeholder="e.g. C:\Program Files\Google\Chrome\Application\chrome.exe"
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setStationAppPaths(prev => ({ ...prev, [app.id]: val }));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveStationAppPath(app.id);
+                                  }
+                                }}
+                                disabled={isSaving}
+                                className="flex-1 px-3 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                              />
+
+                              <button
+                                type="button"
+                                onClick={() => handleSaveStationAppPath(app.id)}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shrink-0 disabled:opacity-50"
+                              >
+                                {isSaving ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="w-3.5 h-3.5" />
+                                )}
+                                <span>Save</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                )
               )}
             </div>
 

@@ -20,6 +20,7 @@ import AnalyticsView from "./components/AnalyticsView";
 import DisputesView from "./components/DisputesView";
 import NotificationsView from "./components/NotificationsView";
 import TeamView from "./components/TeamView";
+import StoreSettingsView from "./components/StoreSettingsView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
 import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
@@ -616,7 +617,7 @@ function Dashboard() {
   const handleAddApp = async (name: string, category: string, executablePath: string, launchArgs?: string) => {
     if (!storeId) return;
     try {
-      await createApp(storeId, { name, category, executablePath, launchArgs });
+      await createApp(storeId, { name, category, executablePath: executablePath || undefined, launchArgs });
       addLog("System", `App added to registry: ${name}`, "success");
       await refreshApps();
     } catch (err) {
@@ -635,9 +636,9 @@ function Dashboard() {
     }
   };
 
-  const handleInstallApp = async (appId: string, systemId: string) => {
+  const handleInstallApp = async (appId: string, systemId: string, executablePath?: string | null) => {
     if (!storeId) return;
-    await installApp(storeId, systemId, appId);
+    await installApp(storeId, systemId, appId, executablePath);
   };
 
   const handleUninstallApp = async (appId: string, systemId: string) => {
@@ -1008,6 +1009,10 @@ function Dashboard() {
               games={games}
               onSubmitScore={handleSubmitScore}
             />
+          )}
+
+          {activeTab === "store_settings" && (
+            <StoreSettingsView />
           )}
 
           {activeTab === "settings" && (

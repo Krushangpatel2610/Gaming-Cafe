@@ -18,7 +18,8 @@ import {
   ShieldQuestion,
   Bell,
   UserCog,
-  KeyRound
+  KeyRound,
+  Store
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -58,6 +59,7 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
   const adminItems = [
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "team", label: "Team & Access", icon: UserCog },
+    { id: "store_settings", label: "Store Settings", icon: Store },
     { id: "settings", label: "Settings", icon: Settings },
   ];
 

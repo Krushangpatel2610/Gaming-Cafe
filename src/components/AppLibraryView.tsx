@@ -29,7 +29,7 @@ interface AppLibraryViewProps {
   storeId: string;
   onAddApp: (name: string, category: string, executablePath: string, launchArgs?: string) => void;
   onUpdateAppStatus: (appId: string, isActive: boolean) => void;
-  onInstallApp: (appId: string, systemId: string) => Promise<void>;
+  onInstallApp: (appId: string, systemId: string, executablePath?: string | null) => Promise<void>;
   onUninstallApp: (appId: string, systemId: string) => Promise<void>;
   onUpdateApp: (appId: string, data: { name?: string; category?: string; executablePath?: string; launchArgs?: string }) => void;
   onDeleteApp: (appId: string, name: string) => void;
@@ -53,19 +53,19 @@ export default function AppLibraryView({
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
   const [newCategory, setNewCategory] = useState<string>("Utilities");
-  const [newExecutablePath, setNewExecutablePath] = useState<string>("");
   const [newLaunchArgs, setNewLaunchArgs] = useState<string>("");
 
   // Edit modal state
   const [editApp, setEditApp] = useState<ApiApp | null>(null);
   const [editName, setEditName] = useState<string>("");
   const [editCategory, setEditCategory] = useState<string>("Utilities");
-  const [editExecutablePath, setEditExecutablePath] = useState<string>("");
   const [editLaunchArgs, setEditLaunchArgs] = useState<string>("");
 
   // Station assignment modal state
   const [assignApp, setAssignApp] = useState<ApiApp | null>(null);
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
+  const [stationPaths, setStationPaths] = useState<Record<string, string>>({});
+  const [savingPathId, setSavingPathId] = useState<string | null>(null);
   const [loadingAssign, setLoadingAssign] = useState<boolean>(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -80,11 +80,10 @@ export default function AppLibraryView({
 
   const handleAddAppSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddApp(newName, newCategory, newExecutablePath, newLaunchArgs || undefined);
+    onAddApp(newName, newCategory, "", newLaunchArgs || undefined);
     setShowAddModal(false);
     setNewName("");
     setNewCategory("Utilities");
-    setNewExecutablePath("");
     setNewLaunchArgs("");
   };
 
@@ -92,7 +91,6 @@ export default function AppLibraryView({
     setEditApp(app);
     setEditName(app.name);
     setEditCategory(app.category || "Utilities");
-    setEditExecutablePath(app.executablePath || "");
     setEditLaunchArgs(app.launchArgs || "");
   };
 
@@ -100,7 +98,6 @@ export default function AppLibraryView({
     setEditApp(null);
     setEditName("");
     setEditCategory("Utilities");
-    setEditExecutablePath("");
     setEditLaunchArgs("");
   };
 
@@ -110,7 +107,6 @@ export default function AppLibraryView({
     onUpdateApp(editApp.id, {
       name: editName,
       category: editCategory,
-      executablePath: editExecutablePath,
       launchArgs: editLaunchArgs || undefined,
     });
     closeEditModal();
@@ -125,11 +121,19 @@ export default function AppLibraryView({
   const openAssignModal = useCallback(async (app: ApiApp) => {
     setAssignApp(app);
     setInstalledIds(new Set());
+    setStationPaths({});
     setLoadingAssign(true);
     setAssignError(null);
     try {
-      const ids = await getAppSystems(storeId, app.id);
-      setInstalledIds(new Set(ids));
+      const assignments = await getAppSystems(storeId, app.id);
+      const ids = new Set<string>();
+      const paths: Record<string, string> = {};
+      for (const item of assignments) {
+        ids.add(item.systemId);
+        paths[item.systemId] = item.executablePath || "";
+      }
+      setInstalledIds(ids);
+      setStationPaths(paths);
     } catch {
       setAssignError("Could not load station assignments.");
     } finally {
@@ -140,6 +144,7 @@ export default function AppLibraryView({
   const closeAssignModal = () => {
     setAssignApp(null);
     setInstalledIds(new Set());
+    setStationPaths({});
     setAssignError(null);
     setTogglingId(null);
   };
@@ -153,13 +158,26 @@ export default function AppLibraryView({
         await onUninstallApp(assignApp.id, systemId);
         setInstalledIds(prev => { const n = new Set(prev); n.delete(systemId); return n; });
       } else {
-        await onInstallApp(assignApp.id, systemId);
+        await onInstallApp(assignApp.id, systemId, stationPaths[systemId] || undefined);
         setInstalledIds(prev => new Set([...prev, systemId]));
       }
     } catch {
       // state unchanged on error
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleSaveStationPath = async (systemId: string, path: string) => {
+    if (!assignApp) return;
+    setSavingPathId(systemId);
+    try {
+      await onInstallApp(assignApp.id, systemId, path || null);
+      setStationPaths(prev => ({ ...prev, [systemId]: path }));
+    } catch (err) {
+      console.error("Failed to update path:", err);
+    } finally {
+      setSavingPathId(null);
     }
   };
 
@@ -238,9 +256,6 @@ export default function AppLibraryView({
                   </div>
                 </div>
 
-                <div className="text-[10px] text-slate-400 font-mono truncate" title={app.executablePath}>
-                  {app.executablePath}
-                </div>
 
                 <span className={`self-start px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
                   app.isActive
@@ -332,17 +347,6 @@ export default function AppLibraryView({
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Executable Path</label>
-                <input
-                  type="text"
-                  required
-                  value={newExecutablePath}
-                  onChange={(e) => setNewExecutablePath(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
-                  placeholder="C:\Program Files\Google\Chrome\Application\chrome.exe"
-                />
-              </div>
-              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Launch Arguments (optional)</label>
                 <input
                   type="text"
@@ -408,16 +412,6 @@ export default function AppLibraryView({
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Executable Path</label>
-                <input
-                  type="text"
-                  required
-                  value={editExecutablePath}
-                  onChange={(e) => setEditExecutablePath(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
-                />
-              </div>
-              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Launch Arguments (optional)</label>
                 <input
                   type="text"
@@ -481,36 +475,69 @@ export default function AppLibraryView({
                 systems.map((sys) => {
                   const installed = installedIds.has(sys.id);
                   const toggling = togglingId === sys.id;
+                  const isSaving = savingPathId === sys.id;
                   return (
-                    <label
+                    <div
                       key={sys.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all select-none ${
-                        installed ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                      className={`p-3 rounded-lg border transition-all ${
+                        installed ? "border-indigo-200 bg-indigo-50/50" : "border-slate-200 bg-white"
                       } ${togglingId && togglingId !== sys.id ? "opacity-50 pointer-events-none" : ""}`}
                     >
-                      <div className="shrink-0 w-4 h-4 flex items-center justify-center">
-                        {toggling ? (
-                          <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                        ) : (
-                          <input
-                            type="checkbox"
-                            checked={installed}
-                            onChange={() => handleToggleSystem(sys.id)}
-                            disabled={!!togglingId}
-                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
+                      <div className="flex items-center gap-3">
+                        <div className="shrink-0 w-4 h-4 flex items-center justify-center">
+                          {toggling ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={installed}
+                              onChange={() => handleToggleSystem(sys.id)}
+                              disabled={!!togglingId}
+                              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none" onClick={() => handleToggleSystem(sys.id)}>
+                          <Monitor className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="text-xs font-semibold text-slate-700 truncate">{sys.name}</span>
+                        </div>
+                        {installed && (
+                          <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded shrink-0">
+                            INSTALLED
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Monitor className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="text-xs font-semibold text-slate-700 truncate">{sys.name}</span>
-                      </div>
+
                       {installed && (
-                        <span className="text-[10px] font-mono font-bold text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded shrink-0">
-                          INSTALLED
-                        </span>
+                        <div className="mt-2.5 pt-2.5 border-t border-indigo-100/60 pl-7 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                              Station Executable Path
+                            </label>
+                            {isSaving && (
+                              <span className="text-[10px] text-indigo-600 flex items-center gap-1 font-mono">
+                                <Loader2 className="w-3 h-3 animate-spin" /> saving…
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="text"
+                            value={stationPaths[sys.id] ?? ""}
+                            onChange={(e) => setStationPaths(prev => ({ ...prev, [sys.id]: e.target.value }))}
+                            onBlur={(e) => handleSaveStationPath(sys.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveStationPath(sys.id, (e.target as HTMLInputElement).value);
+                              }
+                            }}
+                            placeholder="C:\Program Files\Google\Chrome\Application\chrome.exe"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                          />
+                          <p className="text-[10px] text-slate-400">Path to the app specifically on {sys.name}. Press Enter or click outside to save.</p>
+                        </div>
                       )}
-                    </label>
+                    </div>
                   );
                 })
               )}

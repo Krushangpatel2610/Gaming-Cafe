@@ -125,3 +125,54 @@ export function rejectPurchase(
     reason: (reason && reason.trim().length >= 3) ? reason.trim() : "Payment not received or invalid",
   });
 }
+
+// ── Gamepass Orders (Grouped purchases) ──
+
+export interface ApiGamepassOrderItem {
+  id: string;
+  packageId: string;
+  packageName: string;
+  price: string;
+  durationMinutes: number;
+  status: ApiGamepassRedemptionStatus;
+  remainingMinutes: number | null;
+}
+
+export interface ApiGamepassOrder {
+  id: string;
+  storeId: string;
+  userId: string;
+  totalAmount: string;
+  status: "pending" | "confirmed" | "rejected";
+  paymentMethod: string;
+  rejectionReason: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  items: ApiGamepassOrderItem[];
+  itemCount: number;
+}
+
+export function listGamepassOrders(
+  storeId: string,
+  params?: { status?: "pending" | "confirmed" | "rejected"; page?: number; limit?: number }
+): Promise<ApiListResult<ApiGamepassOrder[]>> {
+  const entries = Object.entries({ status: "pending", limit: 50, ...params }).filter(([, v]) => v !== undefined) as [string, string | number][];
+  const qs = entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}` : "";
+  return apiGetPaginated<ApiGamepassOrder[]>(`/stores/${storeId}/gamepass/orders${qs}`);
+}
+
+export function confirmGamepassOrder(storeId: string, orderId: string): Promise<ApiGamepassOrder> {
+  return apiPost<ApiGamepassOrder>(`/stores/${storeId}/gamepass/orders/${orderId}/confirm`);
+}
+
+export function rejectGamepassOrder(
+  storeId: string,
+  orderId: string,
+  reason?: string
+): Promise<ApiGamepassOrder> {
+  return apiPost<ApiGamepassOrder>(`/stores/${storeId}/gamepass/orders/${orderId}/reject`, {
+    reason: (reason && reason.trim().length >= 3) ? reason.trim() : "Payment not received or invalid",
+  });
+}
+

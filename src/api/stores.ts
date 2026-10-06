@@ -110,3 +110,18 @@ export function uploadLoginMedia(
   return apiPostFormData(`/stores/${storeId}/login-background/upload`, formData);
 }
 
+export interface ApiSessionSettings {
+  graceMinutes: number;
+}
+
+export function getSessionSettings(storeId: string): Promise<ApiSessionSettings> {
+  return apiGet(`/stores/${storeId}/session-settings`);
+}
+
+export function updateSessionSettings(
+  storeId: string,
+  body: { graceMinutes: number }
+): Promise<ApiSessionSettings> {
+  return apiPatch(`/stores/${storeId}/session-settings`, body);
+}
+
