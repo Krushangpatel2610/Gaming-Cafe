@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Store, Clock, Shield, Check, Loader2, Info } from "lucide-react";
+import { Store, Clock, Shield, Check, Loader2, Info, Copy } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getSessionSettings, updateSessionSettings } from "../api/stores";
 
@@ -12,6 +12,23 @@ export default function StoreSettingsView() {
   const [saving, setSaving] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [idCopied, setIdCopied] = useState<boolean>(false);
+
+  const handleCopyStoreId = async () => {
+    if (!storeId) return;
+    try {
+      await navigator.clipboard.writeText(storeId);
+    } catch {
+      const el = document.createElement("textarea");
+      el.value = storeId;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setIdCopied(true);
+    setTimeout(() => setIdCopied(false), 2000);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +89,28 @@ export default function StoreSettingsView() {
           </p>
         </div>
       </div>
+
+      {storeId && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">Store ID</label>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-slate-50 text-slate-800 select-all break-all">
+              {storeId}
+            </code>
+            <button
+              type="button"
+              onClick={handleCopyStoreId}
+              className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors"
+            >
+              {idCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{idCopied ? "Copied" : "Copy"}</span>
+            </button>
+          </div>
+          <p className="text-xs text-slate-500">
+            Enter this Store ID when installing GameCentral on a gaming PC.
+          </p>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
