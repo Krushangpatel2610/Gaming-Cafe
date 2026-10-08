@@ -37,6 +37,8 @@ export interface PC {
   platform?: string | null;
   targetCapMinutes?: number | null;
   capChoiceMade?: boolean;
+  inBreak?: boolean;
+  breakStartedAt?: string | null;
 }
 
 export interface Session {
@@ -53,6 +55,7 @@ export interface Session {
   totalCost: number;
   status: "Active" | "Completed" | "Cancelled";
   paymentStatus: "Paid" | "Unpaid";
+  unpaidAmount?: number;
 }
 
 export interface Game {

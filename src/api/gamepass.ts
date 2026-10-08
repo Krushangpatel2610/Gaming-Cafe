@@ -143,11 +143,17 @@ export interface ApiGamepassOrder {
   storeId: string;
   userId: string;
   totalAmount: string;
+  cashAmount?: string;
+  upiAmount?: string;
   status: "pending" | "confirmed" | "rejected";
   paymentMethod: string;
   rejectionReason: string | null;
   reviewedBy: string | null;
   reviewedAt: string | null;
+  cashConfirmedBy?: string | null;
+  cashConfirmedAt?: string | null;
+  upiConfirmedBy?: string | null;
+  upiConfirmedAt?: string | null;
   createdAt: string;
   items: ApiGamepassOrderItem[];
   itemCount: number;
@@ -162,8 +168,15 @@ export function listGamepassOrders(
   return apiGetPaginated<ApiGamepassOrder[]>(`/stores/${storeId}/gamepass/orders${qs}`);
 }
 
-export function confirmGamepassOrder(storeId: string, orderId: string): Promise<ApiGamepassOrder> {
-  return apiPost<ApiGamepassOrder>(`/stores/${storeId}/gamepass/orders/${orderId}/confirm`);
+export function confirmGamepassOrder(
+  storeId: string,
+  orderId: string,
+  line?: "cash" | "upi" | "all"
+): Promise<ApiGamepassOrder> {
+  return apiPost<ApiGamepassOrder>(
+    `/stores/${storeId}/gamepass/orders/${orderId}/confirm`,
+    line ? { line } : {}
+  );
 }
 
 export function rejectGamepassOrder(

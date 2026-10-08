@@ -57,6 +57,8 @@ export interface ApiTopupRequest {
   storeId: string;
   userId: string;
   amount: string;
+  paymentMethod?: "upi" | "cash" | "split";
+  splitGroupId?: string | null;
   utrReference: string | null;
   status: TopupRequestStatus;
   rejectionReason: string | null;

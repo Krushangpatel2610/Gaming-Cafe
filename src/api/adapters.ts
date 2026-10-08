@@ -93,6 +93,8 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
     platform: system.platform ?? null,
     targetCapMinutes: targetCap,
     capChoiceMade: capChoiceMade,
+    inBreak: activeSession?.inBreak ?? system.currentSession?.inBreak ?? Boolean(activeSession?.breakStartedAt || system.currentSession?.breakStartedAt),
+    breakStartedAt: activeSession?.breakStartedAt ?? system.currentSession?.breakStartedAt ?? null,
   };
 }
 
@@ -112,6 +114,10 @@ export function adaptSessionToUI(
   const status: Session["status"] =
     session.status === "in_progress" ? "Active" : session.status === "cancelled" ? "Cancelled" : "Completed";
 
+  const unpaid = session.unpaidAmount ? parseFloat(session.unpaidAmount) : 0;
+  const paymentStatus: Session["paymentStatus"] =
+    unpaid > 0 ? "Unpaid" : session.isBilled ? "Paid" : "Unpaid";
+
   return {
     id: session.id,
     pcId: session.systemId,
@@ -125,6 +131,7 @@ export function adaptSessionToUI(
     ratePerHour,
     totalCost: parseFloat(totalCost.toFixed(2)),
     status,
-    paymentStatus: session.isBilled ? "Paid" : "Unpaid",
+    paymentStatus,
+    unpaidAmount: unpaid > 0 ? unpaid : undefined,
   };
 }

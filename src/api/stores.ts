@@ -112,6 +112,9 @@ export function uploadLoginMedia(
 
 export interface ApiSessionSettings {
   graceMinutes: number;
+  upfrontMinutes: number;
+  extensionBlockMinutes: number;
+  maxChosenHours: number;
 }
 
 export function getSessionSettings(storeId: string): Promise<ApiSessionSettings> {
@@ -120,7 +123,12 @@ export function getSessionSettings(storeId: string): Promise<ApiSessionSettings>
 
 export function updateSessionSettings(
   storeId: string,
-  body: { graceMinutes: number }
+  body: {
+    graceMinutes?: number;
+    upfrontMinutes?: number;
+    extensionBlockMinutes?: number;
+    maxChosenHours?: number;
+  }
 ): Promise<ApiSessionSettings> {
   return apiPatch(`/stores/${storeId}/session-settings`, body);
 }

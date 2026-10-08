@@ -56,3 +56,7 @@ export function stationLogin(storeId: string, systemId: string): Promise<{ sessi
   return apiPost(`/stores/${storeId}/sessions/login`, { systemId });
 }
 
+export function endBreak(storeId: string, sessionId: string): Promise<ApiSession> {
+  return apiPost<ApiSession>(`/stores/${storeId}/sessions/${sessionId}/end-break`);
+}
+

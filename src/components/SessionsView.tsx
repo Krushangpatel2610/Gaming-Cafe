@@ -9,6 +9,7 @@ import {
   DollarSign,
   Plus,
   CheckCircle,
+  AlertTriangle,
   Search
 } from "lucide-react";
 import { Session, PC, SystemSettings } from "../types";
@@ -256,14 +257,26 @@ export default function SessionsView({ currency, sessions,
                           {formatCurrency(sess.totalCost.toFixed(2), currency)}
                         </td>
                         <td className="p-4 text-center">
-                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                            sess.paymentStatus === "Paid"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}>
-                            <CheckCircle className="w-3 h-3" />
-                            <span>{sess.paymentStatus}</span>
-                          </span>
+                          {sess.unpaidAmount && sess.unpaidAmount > 0 ? (
+                            <div className="inline-flex flex-col items-center">
+                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border bg-rose-50 text-rose-700 border-rose-200">
+                                <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                <span>Unpaid</span>
+                              </span>
+                              <span className="text-[10px] text-rose-600 font-mono font-bold mt-0.5">
+                                Due: {formatCurrency(sess.unpaidAmount.toFixed(2), currency)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                              sess.paymentStatus === "Paid"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>
+                              <CheckCircle className="w-3 h-3" />
+                              <span>{sess.paymentStatus}</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

@@ -8,6 +8,9 @@ export default function StoreSettingsView() {
   const canEdit = admin?.role === "super_admin" || admin?.role === "admin";
 
   const [graceMinutes, setGraceMinutes] = useState<number>(5);
+  const [upfrontMinutes, setUpfrontMinutes] = useState<number>(60);
+  const [extensionBlockMinutes, setExtensionBlockMinutes] = useState<number>(30);
+  const [maxChosenHours, setMaxChosenHours] = useState<number>(12);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -40,6 +43,9 @@ export default function StoreSettingsView() {
         const data = await getSessionSettings(storeId);
         if (mounted) {
           setGraceMinutes(data.graceMinutes ?? 5);
+          setUpfrontMinutes(data.upfrontMinutes ?? 60);
+          setExtensionBlockMinutes(data.extensionBlockMinutes ?? 30);
+          setMaxChosenHours(data.maxChosenHours ?? 12);
         }
       } catch (err: any) {
         if (mounted) {
@@ -65,8 +71,14 @@ export default function StoreSettingsView() {
     try {
       const updated = await updateSessionSettings(storeId, {
         graceMinutes: Number(graceMinutes),
+        upfrontMinutes: Number(upfrontMinutes),
+        extensionBlockMinutes: Number(extensionBlockMinutes),
+        maxChosenHours: Number(maxChosenHours),
       });
       setGraceMinutes(updated.graceMinutes);
+      setUpfrontMinutes(updated.upfrontMinutes);
+      setExtensionBlockMinutes(updated.extensionBlockMinutes);
+      setMaxChosenHours(updated.maxChosenHours);
       setSuccessMsg("Session & Billing settings saved successfully!");
       setTimeout(() => setSuccessMsg(null), 3500);
     } catch (err: any) {
@@ -132,65 +144,141 @@ export default function StoreSettingsView() {
           <span className="text-xs">Loading store configuration...</span>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Section: Session & Billing */}
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Section: Session & Grace Period */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-600" />
+                Session &amp; Grace Period
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Controls the courtesy grace duration granted to players upon logging into a gaming PC.
+              </p>
+            </div>
+
+            <div className="space-y-2 max-w-md">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+                Free grace period after login (minutes)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={graceMinutes}
+                  onChange={(e) => setGraceMinutes(Math.max(0, Math.min(30, parseInt(e.target.value) || 0)))}
+                  disabled={!canEdit || saving}
+                  className="w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+                <span className="text-xs text-slate-500 font-mono">minutes (0 – 30)</span>
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Players can add time, buy a gamepass, or top up during this period. Billing starts after it ends.
+              </p>
+            </div>
+          </div>
+
+          {/* Section: Billing Rules */}
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-indigo-600" />
-                  Session &amp; Grace Period
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Controls the courtesy grace duration granted to players upon logging into a gaming PC.
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-base font-bold text-slate-900 font-display flex items-center gap-2">
+                <Shield className="w-4 h-4 text-indigo-600" />
+                Billing Rules
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Upfront commitment, minute-wise settlement, and extension block rules applied to PC sessions.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+                  Upfront Duration (U)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={30}
+                    max={240}
+                    step={15}
+                    value={upfrontMinutes}
+                    onChange={(e) => setUpfrontMinutes(Math.max(30, Math.min(240, parseInt(e.target.value) || 30)))}
+                    disabled={!canEdit || saving}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <span className="text-xs text-slate-500 font-mono shrink-0">min</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Charged upfront at courtesy grace end (default 60m / 1 hour). Non-refundable once grace ends.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+                  Extension Block (B)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={10}
+                    max={120}
+                    step={5}
+                    value={extensionBlockMinutes}
+                    onChange={(e) => setExtensionBlockMinutes(Math.max(10, Math.min(120, parseInt(e.target.value) || 10)))}
+                    disabled={!canEdit || saving}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <span className="text-xs text-slate-500 font-mono shrink-0">min</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Block size charged upfront for playtime past the initial commitment (default 30m / half hour).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
+                  Max Chosen Duration
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={24}
+                    value={maxChosenHours}
+                    onChange={(e) => setMaxChosenHours(Math.max(1, Math.min(24, parseInt(e.target.value) || 1)))}
+                    disabled={!canEdit || saving}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  <span className="text-xs text-slate-500 font-mono shrink-0">hours</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Maximum hours a player can select at login (default 12 hours).
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handleSave} className="space-y-5">
-              <div className="space-y-2 max-w-md">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider font-mono">
-                  Free grace period after login (minutes)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="number"
-                    min={0}
-                    max={30}
-                    value={graceMinutes}
-                    onChange={(e) => setGraceMinutes(Math.max(0, Math.min(30, parseInt(e.target.value) || 0)))}
-                    disabled={!canEdit || saving}
-                    className="w-32 px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                  />
-                  <span className="text-xs text-slate-500 font-mono">minutes (0 – 30)</span>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Players can add time, buy a gamepass, or top up during this period. Billing starts after it ends. Applies to all PCs across your venue.
-                </p>
+            {canEdit && (
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-2 disabled:opacity-50 transition-all"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Changes...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Settings</span>
+                    </>
+                  )}
+                </button>
               </div>
-
-              {canEdit && (
-                <div className="pt-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-2 disabled:opacity-50 transition-all"
-                  >
-                    {saving ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Saving Changes...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Save Session Settings</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-            </form>
+            )}
           </div>
 
           {/* Read-only info card */}
@@ -201,11 +289,22 @@ export default function StoreSettingsView() {
                 Venue Billing Policy
               </span>
             </div>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              <strong>Billing Model:</strong> Charged per hour, in advance. At the start of each session hour, that hour's rate is deducted from the player's wallet balance or active gamepass. If a player logs out early, unused minutes of that ongoing block are non-refundable.
-            </p>
+            <div className="text-xs text-slate-600 space-y-1.5 leading-relaxed">
+              <p>
+                <strong>Initial 1st Hour:</strong> Charged upfront once the free grace period expires. Always at least 1 full hour, non-refundable.
+              </p>
+              <p>
+                <strong>Rest of Chosen Time:</strong> Minutes between 1st hour and initial commitment are charged per minute at session logout.
+              </p>
+              <p>
+                <strong>Credit Holds:</strong> When confirming time, necessary credits are reserved on hold. Settled and released at logout.
+              </p>
+              <p>
+                <strong>Added Time (Extensions):</strong> Time beyond the initial commitment is charged upfront in {extensionBlockMinutes}-minute blocks.
+              </p>
+            </div>
           </div>
-        </div>
+        </form>
       )}
     </div>
   );

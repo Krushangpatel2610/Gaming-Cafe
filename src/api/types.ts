@@ -59,6 +59,8 @@ export interface ApiSystemSessionInfo {
   targetCapMinutes?: number | null;
   capChoiceMade?: boolean;
   remainingMinutes?: number | null;
+  inBreak?: boolean;
+  breakStartedAt?: string | null;
 }
 
 export interface ApiSystem {
@@ -92,10 +94,14 @@ export interface ApiSession {
   endedAt: string | null;
   durationMinutes: number | null;
   isBilled: boolean;
+  unpaidAmount?: string | null;
   walkInPhone: string | null;
   notes: string | null;
   targetCapMinutes?: number | null;
   capChoiceMade?: boolean;
+  breakStartedAt?: string | null;
+  totalBreakMs?: number;
+  inBreak?: boolean;
   createdAt: string;
   updatedAt: string;
 }

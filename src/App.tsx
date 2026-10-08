@@ -24,7 +24,7 @@ import StoreSettingsView from "./components/StoreSettingsView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
 import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
-import { listActiveSessions, listSessions, startManualSession, endSession, extendSession } from "./api/sessions";
+import { listActiveSessions, listSessions, startManualSession, endSession, extendSession, endBreak } from "./api/sessions";
 import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
 import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } from "./api/customers";
@@ -385,6 +385,21 @@ function Dashboard() {
       await refreshLiveData();
     } catch (err) {
       addLog("System", `Failed to extend session on ${pc.name}: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  // HANDLER: Staff remote-end player break
+  const handleEndBreak = async (pcId: string) => {
+    if (!storeId) return;
+    const pc = pcs.find(p => p.id === pcId);
+    if (!pc || !pc.activeSessionId) return;
+
+    try {
+      await endBreak(storeId, pc.activeSessionId);
+      addLog("Session", `Break on ${pc.name} ended by staff. Session resumed.`, "success");
+      await refreshLiveData();
+    } catch (err) {
+      addLog("System", `Failed to end break on ${pc.name}: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     }
   };
 
@@ -884,6 +899,7 @@ function Dashboard() {
               onUpdatePCStatus={handleUpdatePCStatus}
               onStopSession={handleStopSession}
               onExtendSession={handleExtendSession}
+              onEndBreak={handleEndBreak}
               onLockPC={handleLockPC}
               onUnlockPC={handleUnlockPC}
               onAddSystem={handleAddSystem}

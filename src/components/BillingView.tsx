@@ -136,7 +136,10 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
           <select value={genSessionId} onChange={(e) => setGenSessionId(e.target.value)} className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none">
             <option value="">-- Select unbilled session --</option>
             {unbilledSessions.map((s) => (
-              <option key={s.id} value={s.id}>{s.pcName} · {s.customerName} · {new Date(s.startTime).toLocaleString()}</option>
+              <option key={s.id} value={s.id}>
+                {s.pcName} · {s.customerName} · {new Date(s.startTime).toLocaleString()}
+                {s.unpaidAmount && s.unpaidAmount > 0 ? ` (Unpaid: ${formatCurrency(s.unpaidAmount.toFixed(2), currency)})` : ""}
+              </option>
             ))}
           </select>
           <button
@@ -197,7 +200,7 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
                   <td className="px-4 py-3 font-mono text-slate-600">{formatCurrency(parseFloat(b.grossAmount).toFixed(2), currency)}</td>
                   <td className="px-4 py-3 font-mono text-slate-400">{formatCurrency(parseFloat(b.discountAmount).toFixed(2), currency)}</td>
                   <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(b.netAmount).toFixed(2), currency)}</td>
-                  <td className="px-4 py-3 text-slate-500">{b.billingReason}</td>
+                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${b.billingReason === 'upfront_initial' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : b.billingReason === 'extension_block' ? 'bg-purple-50 text-purple-700 border-purple-200' : b.billingReason === 'minute_settlement' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{b.billingReason === 'upfront_initial' ? 'Upfront (1st Hr)' : b.billingReason === 'extension_block' ? 'Extension Block' : b.billingReason === 'minute_settlement' ? 'Minute Settlement' : (b.billingReason || '').replace(/_/g, ' ')}</span></td>
                   <td className="px-4 py-3 text-right"><span className="text-indigo-600 font-semibold">View</span></td>
                 </tr>
               ))
@@ -232,7 +235,8 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
                 <div><span className="text-slate-400 block">Multiplier</span><span className="font-mono text-slate-700">×{selected.billing.appliedMultiplier}</span></div>
                 <div><span className="text-slate-400 block">Gross</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.grossAmount).toFixed(2), currency)}</span></div>
                 <div><span className="text-slate-400 block">Discount</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.discountAmount).toFixed(2), currency)}</span></div>
-                <div className="col-span-2 pt-1 border-t border-slate-100"><span className="text-slate-400 block">Net Amount</span><span className="font-mono text-lg font-bold text-slate-900">{formatCurrency(parseFloat(selected.billing.netAmount).toFixed(2), currency)}</span></div>
+                <div className="pt-1 border-t border-slate-100"><span className="text-slate-400 block">Net Amount</span><span className="font-mono text-lg font-bold text-slate-900">{formatCurrency(parseFloat(selected.billing.netAmount).toFixed(2), currency)}</span></div>
+                <div className="pt-1 border-t border-slate-100"><span className="text-slate-400 block">Billing Stage / Reason</span><span className="font-mono text-xs font-semibold text-slate-700 capitalize">{selected.billing.billingReason.replace(/_/g, " ")}</span></div>
               </div>
 
               {selected.overrides.length > 0 && (

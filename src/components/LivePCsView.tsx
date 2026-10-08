@@ -52,6 +52,7 @@ interface LivePCsViewProps {
   onCreateSystemType: (name: string, hourlyBaseRate: number) => Promise<string | null>;
   onDeleteSystem: (pcId: string) => void;
   onRegenerateKey: (pcId: string) => Promise<string | null>;
+  onEndBreak?: (pcId: string) => void;
 }
 
 const PLATFORMS: ApiSystemPlatform[] = ["pc", "ps5", "ps4", "xbox", "vr", "other"];
@@ -63,6 +64,7 @@ export default function LivePCsView({ currency, pcs,
   onUpdatePCStatus,
   onStopSession,
   onExtendSession,
+  onEndBreak,
   onLockPC,
   onUnlockPC,
   onAddSystem,
@@ -525,7 +527,14 @@ export default function LivePCsView({ currency, pcs,
                         <Users className="w-3.5 h-3.5 text-indigo-600" />
                         <span className="text-xs font-bold text-indigo-900 truncate">{pc.currentUser}</span>
                       </div>
-                      <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded">Active</span>
+                      <div className="flex items-center gap-1.5">
+                        {pc.inBreak && (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                            On Break
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-indigo-100 text-indigo-700 font-bold px-1.5 py-0.5 rounded">Active</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center text-[11px] text-indigo-800 font-mono">
                       <div className="flex items-center space-x-1">
@@ -607,6 +616,15 @@ export default function LivePCsView({ currency, pcs,
                   <div className="flex items-center space-x-1.5">
                     {pc.status === PCStatus.IN_USE ? (
                       <>
+                        {pc.inBreak && onEndBreak && (
+                          <button
+                            onClick={() => onEndBreak(pc.id)}
+                            className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-[11px] font-bold border border-amber-300 shadow-sm"
+                            title="End player break and resume session"
+                          >
+                            End Break
+                          </button>
+                        )}
                         <button
                           onClick={() => setExtendSessionPCId(pc.id)}
                           className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[11px] font-bold border border-indigo-200/50"

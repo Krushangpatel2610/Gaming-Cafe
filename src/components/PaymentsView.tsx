@@ -82,12 +82,16 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
     }
   };
 
-  const handleConfirmOrder = async (order: ApiGamepassOrder) => {
+  const handleConfirmOrder = async (order: ApiGamepassOrder, line?: "cash" | "upi" | "all") => {
     if (!storeId) return;
     setProcessingOrderId(order.id);
     try {
-      await confirmGamepassOrder(storeId, order.id);
-      onNotify(`Confirmed gamepass order (${order.itemCount} pass${order.itemCount > 1 ? 'es' : ''}) for ${formatCurrency(parseFloat(order.totalAmount).toFixed(2), currency)}.`, "success");
+      const res = await confirmGamepassOrder(storeId, order.id, line);
+      if (res.status === "confirmed") {
+        onNotify(`Confirmed gamepass order (${order.itemCount} pass${order.itemCount > 1 ? 'es' : ''}) — all passes activated.`, "success");
+      } else {
+        onNotify(`Confirmed ${line ? line.toUpperCase() : "partial"} line. Passes will activate when both Cash & UPI are confirmed.`, "info");
+      }
       await refreshGamepassOrders();
     } catch (err) {
       onNotify(`Failed to confirm order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
@@ -262,16 +266,28 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
           <div className="divide-y divide-slate-50">
             {topupRequests.map((req) => {
               const cust = customers.find((c) => c.userId === req.userId);
+              const isCash = req.paymentMethod === 'cash';
+              const isSplit = Boolean(req.splitGroupId);
               return (
                 <div key={req.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(parseFloat(req.amount).toFixed(2), currency)}</p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                        {isCash ? 'CASH' : 'UPI'}
+                      </span>
+                      {isSplit && (
+                        <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-purple-600" />
+                          Linked Split
+                        </span>
+                      )}
                       <span className="text-xs text-slate-500">{cust?.name || cust?.phone || req.userId.slice(0, 8)}</span>
                     </div>
                     <p className="text-[10px] text-slate-400 font-mono mt-0.5">
                       {new Date(req.createdAt).toLocaleString()}
                       {req.utrReference && <> · UTR: {req.utrReference}</>}
+                      {isSplit && <> · Linked split top-up (credits interchangeable)</>}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
@@ -281,7 +297,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
                     >
                       <Check className="w-3.5 h-3.5" />
-                      Confirm
+                      Confirm {isCash ? 'Cash' : 'UPI'}
                     </button>
                     <button
                       onClick={() => setRejectTarget(req)}
@@ -319,6 +335,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             {gamepassOrders.map((order) => {
               const cust = customers.find((c) => c.userId === order.userId);
               const price = parseFloat(order.totalAmount).toFixed(2);
+              const isSplit = order.paymentMethod === 'split';
+              const isCash = order.paymentMethod === 'cash';
               return (
                 <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
                   <div className="min-w-0 space-y-2">
@@ -328,6 +346,9 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                       </span>
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
                         {order.itemCount} pass{order.itemCount > 1 ? 'es' : ''}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isSplit ? 'bg-purple-100 text-purple-800 border border-purple-200' : isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                        {isSplit ? 'SPLIT (CASH + UPI)' : isCash ? 'CASH' : 'UPI'}
                       </span>
                       <span className="text-xs text-slate-600 font-medium">
                         {cust?.name || cust?.phone || `Player ${order.userId.slice(0, 8)}`}
@@ -352,21 +373,89 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                         </span>
                       ))}
                     </div>
+
+                    {/* Split payment line details */}
+                    {isSplit && (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono ${order.cashConfirmedAt ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                          <span className="font-bold">CASH:</span>
+                          <span>{formatCurrency(parseFloat(order.cashAmount || '0').toFixed(2), currency)}</span>
+                          {order.cashConfirmedAt ? (
+                            <span className="flex items-center gap-0.5 text-emerald-600 font-bold text-[10px]"><Check className="w-3 h-3" /> Confirmed</span>
+                          ) : (
+                            <span className="text-amber-600 text-[10px] font-medium">Waiting verification</span>
+                          )}
+                        </div>
+
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-mono ${order.upiConfirmedAt ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                          <span className="font-bold">UPI:</span>
+                          <span>{formatCurrency(parseFloat(order.upiAmount || '0').toFixed(2), currency)}</span>
+                          {order.upiConfirmedAt ? (
+                            <span className="flex items-center gap-0.5 text-emerald-600 font-bold text-[10px]"><Check className="w-3 h-3" /> Confirmed</span>
+                          ) : (
+                            <span className="text-amber-600 text-[10px] font-medium">Waiting verification</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                    <button
-                      onClick={() => handleConfirmOrder(order)}
-                      disabled={processingOrderId === order.id}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                    >
-                      {processingOrderId === order.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5" />
-                      )}
-                      <span>Approve Order</span>
-                    </button>
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap justify-end">
+                    {isSplit ? (
+                      <>
+                        {!order.cashConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmOrder(order, 'cash')}
+                            disabled={processingOrderId === order.id}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          >
+                            {processingOrderId === order.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>Confirm Cash ({formatCurrency(parseFloat(order.cashAmount || '0').toFixed(2), currency)})</span>
+                          </button>
+                        )}
+                        {!order.upiConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmOrder(order, 'upi')}
+                            disabled={processingOrderId === order.id}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          >
+                            {processingOrderId === order.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>Confirm UPI ({formatCurrency(parseFloat(order.upiAmount || '0').toFixed(2), currency)})</span>
+                          </button>
+                        )}
+                        {!order.cashConfirmedAt && !order.upiConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmOrder(order, 'all')}
+                            disabled={processingOrderId === order.id}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Confirm Both & Activate</span>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleConfirmOrder(order)}
+                        disabled={processingOrderId === order.id}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                      >
+                        {processingOrderId === order.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Approve Order</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setRejectOrderTarget(order);
