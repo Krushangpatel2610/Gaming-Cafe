@@ -14,6 +14,7 @@ import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from ".
 import { getPaymentQr } from "../api/stores";
 import { listTopupRequests, confirmTopupRequest, rejectTopupRequest, ApiTopupRequest } from "../api/credits";
 import { ApiCustomer, ApiPayment, ApiPaymentMethod, ApiPaymentQr } from "../api/types";
+import PaymentHistoryView from "./PaymentHistoryView";
 
 interface PaymentsViewProps {
   currency: string;
@@ -32,6 +33,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function PaymentsView({ currency, customers, onNotify }: PaymentsViewProps) {
   const { storeId, admin } = useAuth();
+  const [view, setView] = useState<"main" | "history">("main");
   const [qr, setQr] = useState<ApiPaymentQr | null>(null);
   const [payments, setPayments] = useState<ApiPayment[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -256,6 +258,35 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
         </div>
       </div>
 
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setView("main")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+            view === "main"
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          Approvals &amp; Payments
+        </button>
+        <button
+          onClick={() => setView("history")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+            view === "history"
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          Payment History
+        </button>
+      </div>
+
+      {view === "history" && (
+        <PaymentHistoryView currency={currency} customers={customers} onNotify={onNotify} />
+      )}
+
+      {view === "main" && (
+      <>
       {/* Pending wallet top-up requests — player-submitted, needs staff confirm/reject */}
       {canReviewTopups && topupRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
@@ -524,6 +555,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* MODAL: Show QR to customer */}
       {showQrModal && (
