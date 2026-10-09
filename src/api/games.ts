@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost, apiDelete } from "./client";
+import { apiGet, apiPatch, apiPost, apiDelete, apiPostFormData } from "./client";
 import { ApiGame } from "./types";
 
 export function listGames(storeId: string): Promise<ApiGame[]> {
@@ -24,6 +24,12 @@ export interface UpdateGameBody {
 
 export function updateGame(storeId: string, gameId: string, body: UpdateGameBody): Promise<ApiGame> {
   return apiPatch<ApiGame>(`/stores/${storeId}/games/${gameId}`, body);
+}
+
+export function uploadGameImage(storeId: string, gameId: string, file: File): Promise<{ game: ApiGame }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiPostFormData(`/stores/${storeId}/games/${gameId}/image`, formData);
 }
 
 export function installGame(storeId: string, systemId: string, gameId: string, executablePath?: string | null): Promise<unknown> {

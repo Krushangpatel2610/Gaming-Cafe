@@ -29,7 +29,7 @@ import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
 import { listCustomers, registerCustomer, suspendCustomer, activateCustomer } from "./api/customers";
 import { adjustCredits } from "./api/credits";
-import { listGames, createGame, updateGame, installGame, uninstallGame, deleteGame } from "./api/games";
+import { listGames, createGame, updateGame, installGame, uninstallGame, deleteGame, uploadGameImage } from "./api/games";
 import { listApps, createApp, updateApp, installApp, uninstallApp, deleteApp } from "./api/apps";
 import { listCampaigns, createCampaign, cancelCampaign, pauseCampaign, resumeCampaign } from "./api/campaigns";
 import { listPackages, createPackage, updatePackage, assignPackageToSystem, unassignPackageFromSystem, ApiGamepassPackage } from "./api/gamepass";
@@ -569,10 +569,18 @@ function Dashboard() {
   };
 
   // HANDLER: Add game to master catalog
-  const handleAddGame = async (name: string, genre?: string, executablePath?: string) => {
+  const handleAddGame = async (name: string, genre?: string, imageFile?: File | null) => {
     if (!storeId) return;
     try {
-      await createGame(storeId, { name, genre, executablePath });
+      const created = (await createGame(storeId, { name, genre })) as unknown as { id?: string; game?: { id: string } };
+      const newId = created?.id ?? created?.game?.id;
+      if (imageFile && newId) {
+        try {
+          await uploadGameImage(storeId, newId, imageFile);
+        } catch (imgErr) {
+          addLog("System", `Game added, but the cover image failed to upload: ${imgErr instanceof ApiError ? imgErr.message : "unknown error"}`, "warning");
+        }
+      }
       addLog("System", `Game added to registry: ${name}`, "success");
       await refreshGames();
     } catch (err) {
@@ -606,10 +614,17 @@ function Dashboard() {
     await uninstallGame(storeId, systemId, gameId);
   };
 
-  const handleUpdateGame = async (gameId: string, data: { name: string, genre?: string, executablePath?: string }) => {
+  const handleUpdateGame = async (gameId: string, data: { name: string, genre?: string, executablePath?: string }, imageFile?: File | null) => {
     if (!storeId) return;
     try {
       await updateGame(storeId, gameId, data);
+      if (imageFile) {
+        try {
+          await uploadGameImage(storeId, gameId, imageFile);
+        } catch (imgErr) {
+          addLog("System", `Game updated, but the cover image failed to upload: ${imgErr instanceof ApiError ? imgErr.message : "unknown error"}`, "warning");
+        }
+      }
       addLog("System", `Game updated: ${data.name}`, "success");
       await refreshGames();
     } catch (err) {

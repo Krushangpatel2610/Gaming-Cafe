@@ -163,6 +163,7 @@ export interface ApiGame {
   name: string;
   genre?: string | null;
   executablePath?: string | null;
+  imageUrl?: string | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;

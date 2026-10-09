@@ -1,5 +1,5 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { motion } from "motion/react";
 import {
   Gamepad2,
@@ -29,11 +29,11 @@ interface GameLibraryViewProps {
   games: ApiGame[];
   systems: SystemOption[];
   storeId: string;
-  onAddGame: (name: string, genre?: string) => void;
+  onAddGame: (name: string, genre?: string, imageFile?: File | null) => void;
   onUpdateGameStatus: (gameId: string, isActive: boolean) => void;
   onInstallGame: (gameId: string, systemId: string, executablePath?: string | null) => Promise<void>;
   onUninstallGame: (gameId: string, systemId: string) => Promise<void>;
-  onUpdateGame: (gameId: string, data: { name: string, genre?: string }) => void;
+  onUpdateGame: (gameId: string, data: { name: string, genre?: string }, imageFile?: File | null) => void;
   onDeleteGame: (gameId: string, name: string) => void;
 }
 
@@ -52,6 +52,10 @@ export default function GameLibraryView({ currency, games,
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>("");
   const [newGenre, setNewGenre] = useState<string>("");
+  const [newImageFile, setNewImageFile] = useState<File | null>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const newImagePreview = useMemo(() => (newImageFile ? URL.createObjectURL(newImageFile) : null), [newImageFile]);
+  const editImagePreview = useMemo(() => (editImageFile ? URL.createObjectURL(editImageFile) : null), [editImageFile]);
 
   // Edit modal state
   const [editGame, setEditGame] = useState<ApiGame | null>(null);
@@ -77,22 +81,25 @@ export default function GameLibraryView({ currency, games,
 
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddGame(newName, newGenre || undefined);
+    onAddGame(newName, newGenre || undefined, newImageFile);
     setShowAddModal(false);
     setNewName("");
     setNewGenre("");
+    setNewImageFile(null);
   };
 
   const openEditModal = (game: ApiGame) => {
     setEditGame(game);
     setEditName(game.name);
     setEditGenre(game.genre || "");
+    setEditImageFile(null);
   };
 
   const closeEditModal = () => {
     setEditGame(null);
     setEditName("");
     setEditGenre("");
+    setEditImageFile(null);
   };
 
   const handleEditGameSubmit = (e: React.FormEvent) => {
@@ -101,7 +108,7 @@ export default function GameLibraryView({ currency, games,
     onUpdateGame(editGame.id, {
       name: editName,
       genre: editGenre || undefined,
-    });
+    }, editImageFile);
     closeEditModal();
   };
 
@@ -246,9 +253,13 @@ export default function GameLibraryView({ currency, games,
                     <h3 className="text-sm font-bold text-slate-800 line-clamp-1">{game.name}</h3>
                     <p className="text-[11px] text-slate-400 font-medium">{game.genre || "Uncategorized"}</p>
                   </div>
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                    <Gamepad2 className="w-4.5 h-4.5 text-blue-500" />
-                  </div>
+                  {game.imageUrl ? (
+                    <img src={game.imageUrl} alt="" className="w-14 h-9 rounded-lg border border-slate-200 object-cover shrink-0" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                      <Gamepad2 className="w-4.5 h-4.5 text-blue-500" />
+                    </div>
+                  )}
                 </div>
 
                 <span className={`self-start px-2 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
@@ -336,6 +347,19 @@ export default function GameLibraryView({ currency, games,
                   placeholder="e.g. Action RPG"
                 />
               </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Cover Image (optional)</label>
+                <div className="flex items-center gap-3">
+                  {newImagePreview && <img src={newImagePreview} alt="" className="w-20 h-12 rounded-lg border border-slate-200 object-cover" />}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => setNewImageFile(e.target.files?.[0] ?? null)}
+                    className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">PNG, JPEG or WebP up to 5 MB. Shown on the game card at the kiosk. Steam games get their art automatically if left empty.</p>
+              </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -387,6 +411,21 @@ export default function GameLibraryView({ currency, games,
                   onChange={(e) => setEditGenre(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Cover Image</label>
+                <div className="flex items-center gap-3">
+                  {(editImagePreview || editGame?.imageUrl) && (
+                    <img src={editImagePreview || editGame?.imageUrl || ""} alt="" className="w-20 h-12 rounded-lg border border-slate-200 object-cover" />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => setEditImageFile(e.target.files?.[0] ?? null)}
+                    className="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400">Choose a new file to replace the current image (PNG, JPEG or WebP, up to 5 MB).</p>
               </div>
               <div className="flex space-x-3 pt-4 border-t border-slate-100">
                 <button
