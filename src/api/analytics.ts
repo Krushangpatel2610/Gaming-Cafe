@@ -15,6 +15,34 @@ function toQueryString(params?: object): string {
   return `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}`;
 }
 
+export interface TodayRevenueData {
+  date: string;
+  timezone: string;
+  allTime: {
+    total: number;
+    cash: number;
+    upi: number;
+    other: number;
+  };
+  today: {
+    total: number;
+    cash: number;
+    upi: number;
+    other: number;
+    playTimeBilled: number;
+  };
+  sources: {
+    topups: { cash: number; upi: number; todayCash: number; todayUpi: number };
+    gamepass: { cash: number; upi: number; todayCash: number; todayUpi: number };
+    beverages: { cash: number; upi: number; todayCash: number; todayUpi: number };
+    counterPayments: { cash: number; upi: number; todayCash: number; todayUpi: number };
+  };
+}
+
+export function getTodayRevenueAnalytics(storeId: string): Promise<TodayRevenueData> {
+  return apiGet(`/stores/${storeId}/analytics/today`);
+}
+
 export function getDashboardAnalytics(storeId: string, date?: string): Promise<ApiDashboardAnalytics> {
   return apiGet(`/stores/${storeId}/analytics/dashboard${toQueryString({ date })}`);
 }

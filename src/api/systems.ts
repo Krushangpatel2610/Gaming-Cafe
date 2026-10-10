@@ -65,3 +65,29 @@ export function lockSystem(storeId: string, systemId: string): Promise<LockComma
 export function unlockSystem(storeId: string, systemId: string): Promise<LockCommandResult> {
   return apiPost<LockCommandResult>(`/stores/${storeId}/systems/${systemId}/unlock`);
 }
+
+export interface ForceLogoutResult {
+  systemId: string;
+  loggedOut: boolean;
+  sessionId?: string;
+  message: string;
+}
+
+export function forceLogoutSystem(storeId: string, systemId: string): Promise<ForceLogoutResult> {
+  return apiPost<ForceLogoutResult>(`/stores/${storeId}/systems/${systemId}/force-logout`);
+}
+
+export interface PowerCommandResult {
+  systemId: string;
+  delivered: boolean;
+  message: string;
+}
+
+export function powerOffSystem(storeId: string, systemId: string, force = false): Promise<PowerCommandResult> {
+  return apiPost<PowerCommandResult>(`/stores/${storeId}/systems/${systemId}/power-off`, { force });
+}
+
+export function powerOnSystem(storeId: string, systemId: string): Promise<PowerCommandResult> {
+  return apiPost<PowerCommandResult>(`/stores/${storeId}/systems/${systemId}/power-on`);
+}
+

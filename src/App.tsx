@@ -23,7 +23,7 @@ import TeamView from "./components/TeamView";
 import StoreSettingsView from "./components/StoreSettingsView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
-import { listLiveSystems, updateSystem, lockSystem, unlockSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
+import { listLiveSystems, updateSystem, lockSystem, unlockSystem, forceLogoutSystem, powerOffSystem, powerOnSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
 import { listActiveSessions, listSessions, startManualSession, endSession, extendSession, endBreak } from "./api/sessions";
 import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
@@ -38,6 +38,7 @@ import { updateStore, getStoreProfile } from "./api/stores";
 import { ApiCustomer, ApiGame, ApiApp, ApiCampaign, ApiSystemType } from "./api/types";
 import GamepassView from "./components/GamepassView";
 import GuestAccessView from "./components/GuestAccessView";
+import BeveragesView from "./components/BeveragesView";
 
 import {
   PC,
@@ -433,6 +434,39 @@ function Dashboard() {
         result.agentOnline ? "success" : "warning");
     } catch (err) {
       addLog("System", `Failed to unlock ${pc.name}: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  // HANDLER: Force logout player from GameCentral software (without locking Windows OS)
+  const handleForceLogoutPC = async (pcId: string) => {
+    if (!storeId) return;
+    const pc = pcs.find(p => p.id === pcId);
+    if (!pc) return;
+    try {
+      const result = await forceLogoutSystem(storeId, pcId);
+      addLog("Session", result.message || `Player logged out of ${pc.name}.`, result.loggedOut ? "success" : "info");
+      await refreshLiveData();
+    } catch (err) {
+      addLog("System", `Failed to force logout ${pc.name}: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    }
+  };
+
+  // HANDLER: Real hardware power off (shutdown OS) or power on (Wake-on-LAN)
+  const handlePowerTogglePC = async (pcId: string, turnOn: boolean) => {
+    if (!storeId) return;
+    const pc = pcs.find(p => p.id === pcId);
+    if (!pc) return;
+    try {
+      if (turnOn) {
+        const result = await powerOnSystem(storeId, pcId);
+        addLog("PC", result.message || `Wake-on-LAN dispatched for ${pc.name}.`, result.delivered ? "success" : "warning");
+      } else {
+        const result = await powerOffSystem(storeId, pcId, true);
+        addLog("PC", result.message || `Shutdown signal dispatched to ${pc.name}.`, result.delivered ? "warning" : "info");
+      }
+      await refreshLiveData();
+    } catch (err) {
+      addLog("System", `Power operation on ${pc.name} failed: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     }
   };
 
@@ -895,6 +929,7 @@ function Dashboard() {
 
           {activeTab === "dashboard" && (
             <DashboardView currency={settings.currency} 
+              storeId={storeId}
               pcs={pcs}
               customers={customers}
               sessions={sessions}
@@ -917,6 +952,8 @@ function Dashboard() {
               onEndBreak={handleEndBreak}
               onLockPC={handleLockPC}
               onUnlockPC={handleUnlockPC}
+              onForceLogoutPC={handleForceLogoutPC}
+              onPowerTogglePC={handlePowerTogglePC}
               onAddSystem={handleAddSystem}
               onEditSystem={handleEditSystem}
               onCreateSystemType={handleCreateSystemType}
@@ -1031,6 +1068,10 @@ function Dashboard() {
               onAssignSystem={handleAssignPackageToSystem}
               onUnassignSystem={handleUnassignPackageFromSystem}
             />
+          )}
+
+          {activeTab === "beverages" && (
+            <BeveragesView currency={settings.currency} />
           )}
 
           {activeTab === "leaderboard" && (

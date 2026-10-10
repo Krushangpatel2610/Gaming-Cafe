@@ -19,7 +19,8 @@ import {
   Bell,
   UserCog,
   KeyRound,
-  Store
+  Store,
+  Coffee
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
@@ -43,6 +44,7 @@ export default function Sidebar({ activeTab, setActiveTab, loungeName }: Sidebar
     { id: "bookings", label: "Bookings", icon: CalendarDays },
     { id: "customers", label: "Customers", icon: Users },
     { id: "gamepass", label: "Gamepass", icon: Ticket },
+    { id: "beverages", label: "Beverages", icon: Coffee },
     { id: "games", label: "Game Library", icon: Gamepad2 },
     { id: "apps", label: "App Library", icon: AppWindow },
     { id: "offers", label: "Offers & Promos", icon: Tag },

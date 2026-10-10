@@ -1,13 +1,19 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle, Sparkles, Loader2, RefreshCw, Layers } from "lucide-react";
+import { QrCode, Plus, X, Undo2, Wallet, Clock, Check, XCircle, Sparkles, Loader2, RefreshCw, Layers, Coffee } from "lucide-react";
 import {
   listGamepassOrders,
   confirmGamepassOrder,
   rejectGamepassOrder,
   ApiGamepassOrder,
 } from "../api/gamepass";
+import {
+  listBeverageOrders,
+  confirmBeverageOrder,
+  rejectBeverageOrder,
+  ApiBeverageOrder,
+} from "../api/beverages";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from "../api/payments";
@@ -60,6 +66,9 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const [rejectOrderReason, setRejectOrderReason] = useState<string>("");
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
+  const [beverageOrders, setBeverageOrders] = useState<ApiBeverageOrder[]>([]);
+  const [processingBevOrderId, setProcessingBevOrderId] = useState<string | null>(null);
+
   const canRecord = admin?.role === "super_admin" || admin?.role === "admin";
   const canRefund = admin?.role === "super_admin";
   const canReviewTopups = admin?.role === "super_admin" || admin?.role === "admin";
@@ -81,6 +90,46 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
       setGamepassOrders(data);
     } catch (err) {
       // Non-fatal background fetch
+    }
+  };
+
+  const refreshBeverageOrders = async () => {
+    if (!storeId) return;
+    try {
+      const data = await listBeverageOrders(storeId, "pending_payment");
+      setBeverageOrders(data);
+    } catch (err) {
+      // Non-fatal background fetch
+    }
+  };
+
+  const handleConfirmBeverageOrder = async (order: ApiBeverageOrder, line?: "cash" | "upi" | "all") => {
+    if (!storeId) return;
+    setProcessingBevOrderId(order.id);
+    try {
+      await confirmBeverageOrder(storeId, order.id, line);
+      onNotify(`Confirmed beverage order payment from ${order.user?.name || "player"}. Ready for delivery!`, "success");
+      await refreshBeverageOrders();
+    } catch (err) {
+      onNotify(`Failed to confirm beverage order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingBevOrderId(null);
+    }
+  };
+
+  const handleRejectBeverageOrder = async (order: ApiBeverageOrder) => {
+    if (!storeId) return;
+    const reason = window.prompt("Reason for rejecting beverage order:");
+    if (!reason) return;
+    setProcessingBevOrderId(order.id);
+    try {
+      await rejectBeverageOrder(storeId, order.id, reason);
+      onNotify("Beverage order rejected.", "info");
+      await refreshBeverageOrders();
+    } catch (err) {
+      onNotify(`Failed to reject beverage order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingBevOrderId(null);
     }
   };
 
@@ -153,9 +202,11 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
     if (!storeId) return;
     refreshTopupRequests();
     refreshGamepassOrders();
+    refreshBeverageOrders();
     const interval = setInterval(() => {
       refreshTopupRequests();
       refreshGamepassOrders();
+      refreshBeverageOrders();
     }, 8000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -494,6 +545,132 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                       }}
                       disabled={processingOrderId === order.id}
                       className="px-3.5 py-1.5 border border-slate-200 hover:bg-slate-100 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Pending Beverage Orders — player-submitted via kiosk, needs staff confirmation */}
+      {canReviewTopups && beverageOrders.length > 0 && (
+        <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
+          <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/70 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Coffee className="w-4 h-4 text-amber-700" />
+              <h3 className="text-sm font-bold text-amber-900">Pending Beverage Orders ({beverageOrders.length})</h3>
+            </div>
+            <button
+              onClick={refreshBeverageOrders}
+              className="p-1 hover:bg-amber-100 rounded text-amber-700 transition-colors"
+              title="Refresh beverage orders"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {beverageOrders.map((ord) => {
+              const isCash = ord.paymentMethod === 'cash';
+              const isSplit = ord.paymentMethod === 'split';
+
+              return (
+                <div key={ord.id} className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 px-4 py-3.5 hover:bg-amber-50/20 transition-colors">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 bg-slate-900 text-white rounded text-[11px] font-mono font-bold">
+                        {ord.system?.name || "Station"}
+                      </span>
+                      <p className="font-mono font-bold text-slate-900 text-sm">
+                        {formatCurrency(parseFloat(ord.totalAmount).toFixed(2), currency)}
+                      </p>
+                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isSplit ? 'bg-purple-100 text-purple-800 border border-purple-200' : isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                        {isSplit ? 'SPLIT (CASH + UPI)' : isCash ? 'CASH' : 'UPI'}
+                      </span>
+                      <span className="text-xs text-slate-600 font-medium">
+                        {ord.user?.name || `Player ${ord.userId.slice(0, 8)}`}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        · {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    {/* Items breakdown */}
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {ord.items && ord.items.map((it, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-xs text-slate-700">
+                          <span className="font-semibold">{it.quantity}x {it.name}</span>
+                          <span className="text-slate-400 font-mono text-[11px]">({formatCurrency(parseFloat(it.unitPrice), currency)})</span>
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Split line details */}
+                    {isSplit && (
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          Cash: Rs {ord.cashAmount} {ord.cashConfirmedAt ? '✓' : '(Pending)'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          UPI: Rs {ord.upiAmount} {ord.upiConfirmedAt ? '✓' : '(Pending)'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap justify-end">
+                    {isSplit ? (
+                      <>
+                        {!ord.cashConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmBeverageOrder(ord, 'cash')}
+                            disabled={processingBevOrderId === ord.id}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
+                          >
+                            Confirm Cash (Rs {ord.cashAmount})
+                          </button>
+                        )}
+                        {!ord.upiConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmBeverageOrder(ord, 'upi')}
+                            disabled={processingBevOrderId === ord.id}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
+                          >
+                            Confirm UPI (Rs {ord.upiAmount})
+                          </button>
+                        )}
+                        {!ord.cashConfirmedAt && !ord.upiConfirmedAt && (
+                          <button
+                            onClick={() => handleConfirmBeverageOrder(ord, 'all')}
+                            disabled={processingBevOrderId === ord.id}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
+                          >
+                            Confirm Both
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleConfirmBeverageOrder(ord, 'all')}
+                        disabled={processingBevOrderId === ord.id}
+                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                      >
+                        {processingBevOrderId === ord.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
+                        <span>Confirm Payment</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleRejectBeverageOrder(ord)}
+                      disabled={processingBevOrderId === ord.id}
+                      className="px-3 py-1.5 border border-slate-200 hover:bg-slate-100 disabled:opacity-50 text-slate-600 rounded-lg text-xs font-semibold flex items-center gap-1"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                       <span>Reject</span>

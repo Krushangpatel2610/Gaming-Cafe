@@ -17,6 +17,7 @@ import {
   DollarSign,
   Lock,
   Unlock,
+  LogOut,
   Plus,
   X,
   ChevronDown,
@@ -47,6 +48,8 @@ interface LivePCsViewProps {
   onExtendSession: (pcId: string, additionalMinutes: number) => void;
   onLockPC: (pcId: string) => void;
   onUnlockPC: (pcId: string) => void;
+  onForceLogoutPC?: (pcId: string) => void;
+  onPowerTogglePC?: (pcId: string, turnOn: boolean) => void;
   onAddSystem: (body: CreateSystemBody) => Promise<{ systemId: string; apiKey: string } | null>;
   onEditSystem: (pcId: string, body: UpdateSystemBody) => Promise<boolean>;
   onCreateSystemType: (name: string, hourlyBaseRate: number) => Promise<string | null>;
@@ -67,6 +70,8 @@ export default function LivePCsView({ currency, pcs,
   onEndBreak,
   onLockPC,
   onUnlockPC,
+  onForceLogoutPC,
+  onPowerTogglePC,
   onAddSystem,
   onEditSystem,
   onCreateSystemType,
@@ -115,6 +120,10 @@ export default function LivePCsView({ currency, pcs,
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [customGuestName, setCustomGuestName] = useState<string>("Gamer Guest");
   const [duration, setDuration] = useState<number>(60); // minutes, member path only — guests get a fixed 2hr walk-in block
+
+  // Modal State for Force Logout & Real Power Off/On
+  const [forceLogoutTarget, setForceLogoutTarget] = useState<PC | null>(null);
+  const [powerTarget, setPowerTarget] = useState<{ pc: PC; turnOn: boolean } | null>(null);
 
   // Modal State for extending a session
   const [extendSessionPCId, setExtendSessionPCId] = useState<string | null>(null);
@@ -676,15 +685,20 @@ export default function LivePCsView({ currency, pcs,
 
                         <button
                           onClick={() => {
-                            const nextStatus = pc.status === PCStatus.OFFLINE ? PCStatus.AVAILABLE : PCStatus.OFFLINE;
-                            onUpdatePCStatus(pc.id, nextStatus);
+                            const turnOn = pc.status === PCStatus.OFFLINE;
+                            if (onPowerTogglePC) {
+                              setPowerTarget({ pc, turnOn });
+                            } else {
+                              const nextStatus = turnOn ? PCStatus.AVAILABLE : PCStatus.OFFLINE;
+                              onUpdatePCStatus(pc.id, nextStatus);
+                            }
                           }}
                           className={`p-1.5 border rounded-lg ${
                             pc.status === PCStatus.OFFLINE
                               ? "bg-slate-800 text-slate-400 border-slate-900 hover:bg-slate-700"
                               : "bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
                           }`}
-                          title={pc.status === PCStatus.OFFLINE ? "Turn station ON" : "Turn station OFF"}
+                          title={pc.status === PCStatus.OFFLINE ? "Turn station ON (Wake-on-LAN)" : "Turn station OFF (Physically shut down PC)"}
                         >
                           <Power className="w-3.5 h-3.5" />
                         </button>
@@ -693,17 +707,22 @@ export default function LivePCsView({ currency, pcs,
                   </div>
                 </div>
 
-                {/* Remote lock/unlock — independent of session state, pushed
-                    over the agent WebSocket to the physical PC Client */}
+                {/* Remote controls: Force Logout (software only) & unlock */}
                 <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/70">
                   <span className="text-[10px] text-slate-400 font-mono uppercase mr-auto">Remote:</span>
                   <button
-                    onClick={() => onLockPC(pc.id)}
-                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 rounded text-[10px] font-bold flex items-center space-x-1"
-                    title="Force-lock this PC regardless of session state"
+                    onClick={() => {
+                      if (onForceLogoutPC) {
+                        setForceLogoutTarget(pc);
+                      } else {
+                        onLockPC(pc.id);
+                      }
+                    }}
+                    className="px-2 py-1 bg-white hover:bg-amber-50 border border-slate-200 text-slate-600 hover:text-amber-700 rounded text-[10px] font-bold flex items-center space-x-1"
+                    title="Logs the player out of GameCentral software. Does not lock or sign out Windows."
                   >
-                    <Lock className="w-3 h-3" />
-                    <span>Lock</span>
+                    <LogOut className="w-3 h-3 text-amber-600" />
+                    <span>Force logout</span>
                   </button>
                   <button
                     onClick={() => onUnlockPC(pc.id)}
@@ -1560,6 +1579,150 @@ export default function LivePCsView({ currency, pcs,
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold"
               >
                 Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Force Logout Confirmation */}
+      {forceLogoutTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                  <LogOut className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Force Logout Player</h3>
+                  <p className="text-xs text-slate-500">{forceLogoutTarget.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setForceLogoutTarget(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Log out <span className="font-semibold text-slate-800">{forceLogoutTarget.currentUser || "current player"}</span> from <span className="font-semibold text-slate-800">{forceLogoutTarget.name}</span>?
+              </p>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/60 text-xs text-amber-800 space-y-1">
+                <div className="font-semibold flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5" />
+                  <span>Software Logout Only</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">
+                  This ends the active session in GameCentral, releases the station, and settles billing immediately. It <strong>does NOT</strong> lock or sign out the Windows OS account.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setForceLogoutTarget(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onForceLogoutPC && forceLogoutTarget) {
+                    onForceLogoutPC(forceLogoutTarget.id);
+                  }
+                  setForceLogoutTarget(null);
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Confirm Logout</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* MODAL: Power Off / Power On Confirmation */}
+      {powerTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl shadow-xl border border-slate-100 w-full max-w-md overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className={`p-2 rounded-lg ${powerTarget.turnOn ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>
+                  <Power className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">
+                    {powerTarget.turnOn ? "Power On Station" : "Turn Station Off"}
+                  </h3>
+                  <p className="text-xs text-slate-500">{powerTarget.pc.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setPowerTarget(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {powerTarget.turnOn ? (
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Send Wake-on-LAN magic packet through an active relay station to wake <span className="font-semibold text-slate-800">{powerTarget.pc.name}</span>.
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    This will physically send an OS shutdown command (<code className="bg-slate-100 px-1 py-0.5 rounded text-[11px]">shutdown /s /f</code>) to <span className="font-semibold text-slate-800">{powerTarget.pc.name}</span>.
+                  </p>
+                  {powerTarget.pc.activeSessionId && (
+                    <div className="p-3 bg-red-50 rounded-xl border border-red-200/60 text-xs text-red-800 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Active Player Detected</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed">
+                        <span className="font-semibold">{powerTarget.pc.currentUser || "A player"}</span> is currently playing. Confirming will end their session, bill play time, and then shut down the station.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setPowerTarget(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onPowerTogglePC && powerTarget) {
+                    onPowerTogglePC(powerTarget.pc.id, powerTarget.turnOn);
+                  }
+                  setPowerTarget(null);
+                }}
+                className={`px-4 py-2 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 ${
+                  powerTarget.turnOn ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>{powerTarget.turnOn ? "Send Wake Signal" : "Turn Station Off"}</span>
               </button>
             </div>
           </motion.div>

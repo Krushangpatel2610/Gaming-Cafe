@@ -14,9 +14,11 @@ import {
 } from "lucide-react";
 import { PC, Session, PCStatus } from "../types";
 import { ApiCustomer, ApiGame } from "../api/types";
+import { getTodayRevenueAnalytics, TodayRevenueData } from "../api/analytics";
 
 interface DashboardViewProps {
   currency: string;
+  storeId?: string | null;
   pcs: PC[];
   customers: ApiCustomer[];
   sessions: Session[];
@@ -26,7 +28,7 @@ interface DashboardViewProps {
   onQuickRegisterCustomer: () => void;
 }
 
-export default function DashboardView({ currency, pcs, 
+export default function DashboardView({ currency, storeId, pcs, 
   customers, 
   sessions, 
   games, 
@@ -34,14 +36,41 @@ export default function DashboardView({ currency, pcs,
   onQuickStartSession,
   onQuickRegisterCustomer
 }: DashboardViewProps) {
-  
+  const [revenueData, setRevenueData] = React.useState<TodayRevenueData | null>(null);
+  const [revenueViewIndex, setRevenueViewIndex] = React.useState<number>(0);
+  const [isRevenueHovered, setIsRevenueHovered] = React.useState<boolean>(false);
+
+  // Auto-rotate revenue card every 5 seconds (paused on hover)
+  React.useEffect(() => {
+    if (isRevenueHovered) return;
+    const interval = setInterval(() => {
+      setRevenueViewIndex((prev) => (prev + 1) % 3);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isRevenueHovered]);
+
+  // Fetch today & all-time revenue breakdown
+  React.useEffect(() => {
+    if (!storeId) return;
+    let mounted = true;
+    const loadRevenue = async () => {
+      try {
+        const data = await getTodayRevenueAnalytics(storeId);
+        if (mounted) setRevenueData(data);
+      } catch (err) {
+        console.warn("Failed to load today revenue analytics:", err);
+      }
+    };
+    loadRevenue();
+    const timer = setInterval(loadRevenue, 30000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [storeId]);
+
   // Computations
   const totalActiveSessions = sessions.filter(s => s.status === "Active").length;
-  
-  // Today's total sales (completed and active)
-  const totalSalesToday = sessions
-    .filter(s => s.status === "Completed" || s.status === "Active")
-    .reduce((sum, s) => sum + s.totalCost, 0);
 
   const activeMembersCount = pcs.filter(pc => pc.status === PCStatus.IN_USE && pc.currentUser).length;
   const maintenanceCount = pcs.filter(pc => pc.status === PCStatus.MAINTENANCE).length;
@@ -101,63 +130,171 @@ export default function DashboardView({ currency, pcs,
 
       {/* Grid of Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
-          {
-            title: "Active Sessions",
-            value: totalActiveSessions,
-            sub: "PCs actively in use",
-            icon: Play,
-            color: "text-indigo-600 bg-indigo-50 border-indigo-100",
-            tab: "sessions"
-          },
-          {
-            title: "Today's Gross Cash",
-            value: `₹${totalSalesToday.toFixed(2)}`,
-            sub: "Active + completed sessions",
-            icon: DollarSign,
-            color: "text-emerald-600 bg-emerald-50 border-emerald-100",
-            tab: "sessions"
-          },
-          {
-            title: "Logged-in Members",
-            value: activeMembersCount,
-            sub: "Identified customers on PCs",
-            icon: Users,
-            color: "text-purple-600 bg-purple-50 border-purple-100",
-            tab: "customers"
-          },
-          {
-            title: "Under Maintenance",
-            value: maintenanceCount,
-            sub: "Hardware diagnostics pending",
-            icon: AlertTriangle,
-            color: maintenanceCount > 0 ? "text-amber-600 bg-amber-50 border-amber-100" : "text-slate-400 bg-slate-50 border-slate-100",
-            tab: "live_pcs"
-          }
-        ].map((card, i) => (
-          <div
-            key={i}
-            onClick={() => setActiveTab(card.tab)}
-            className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision hover:border-slate-300 hover:shadow-precision-md transition-all cursor-pointer group"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-xs font-semibold text-slate-500 font-mono uppercase tracking-wider mb-2">
-                  {card.title}
-                </p>
-                <h3 className="text-2xl font-bold text-slate-900 font-display">
-                  {card.value}
-                </h3>
-                <p className="text-xs text-slate-400 mt-1.5 font-sans">
-                  {card.sub}
-                </p>
-              </div>
-              <div className={`p-3 rounded-lg border shrink-0 transition-transform duration-150 group-hover:scale-105 ${card.color}`}>
-                <card.icon className="w-5 h-5" />
-              </div>
+        {/* Card 1: Active Sessions */}
+        <div
+          onClick={() => setActiveTab("sessions")}
+          className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision hover:border-slate-300 hover:shadow-precision-md transition-all cursor-pointer group"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 font-mono uppercase tracking-wider mb-2">
+                Active Sessions
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 font-display">
+                {totalActiveSessions}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1.5 font-sans">
+                PCs actively in use
+              </p>
+            </div>
+            <div className="p-3 rounded-lg border shrink-0 transition-transform duration-150 group-hover:scale-105 text-indigo-600 bg-indigo-50 border-indigo-100">
+              <Play className="w-5 h-5" />
             </div>
           </div>
-        ))}
+        </div>
+
+        {/* Card 2: Rotating Revenue Card (Item 5: Total / Cash vs UPI / Today) */}
+        {(() => {
+          const allTimeTotal = revenueData?.allTime?.total ?? 0;
+          const allTimeCash = revenueData?.allTime?.cash ?? 0;
+          const allTimeUpi = revenueData?.allTime?.upi ?? 0;
+          const todayTotal = revenueData?.today?.total ?? 0;
+          const todayCash = revenueData?.today?.cash ?? 0;
+          const todayUpi = revenueData?.today?.upi ?? 0;
+          const playTimeBilled = revenueData?.today?.playTimeBilled ?? 0;
+
+          const cashPct = allTimeTotal > 0 ? Math.round((allTimeCash / allTimeTotal) * 100) : 50;
+          const upiPct = allTimeTotal > 0 ? 100 - cashPct : 50;
+
+          let cardTitle = "Total Revenue";
+          let badgeText = "All-Time";
+          let cardValue = `₹${allTimeTotal.toFixed(2)}`;
+          let cardSub = `Cash ₹${allTimeCash.toFixed(2)} · UPI ₹${allTimeUpi.toFixed(2)}`;
+
+          if (revenueViewIndex === 1) {
+            cardTitle = "Cash vs UPI";
+            badgeText = "Split";
+            cardValue = `${cashPct}% Cash · ${upiPct}% UPI`;
+            cardSub = `₹${allTimeCash.toFixed(2)} Cash / ₹${allTimeUpi.toFixed(2)} UPI`;
+          } else if (revenueViewIndex === 2) {
+            cardTitle = "Today's Revenue";
+            badgeText = "Today";
+            cardValue = `₹${todayTotal.toFixed(2)}`;
+            cardSub = todayTotal > 0
+              ? `Cash ₹${todayCash.toFixed(2)} · UPI ₹${todayUpi.toFixed(2)} · Play: ₹${playTimeBilled.toFixed(2)}`
+              : `Nothing received yet today · Play: ₹${playTimeBilled.toFixed(2)}`;
+          }
+
+          return (
+            <div
+              onClick={() => setActiveTab("payments")}
+              onMouseEnter={() => setIsRevenueHovered(true)}
+              onMouseLeave={() => setIsRevenueHovered(false)}
+              className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision hover:border-slate-300 hover:shadow-precision-md transition-all cursor-pointer group flex flex-col justify-between"
+              title="Rotating Revenue card (Total / Cash vs UPI / Today). Pauses on hover."
+            >
+              <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0 pr-2">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <p className="text-xs font-semibold text-slate-500 font-mono uppercase tracking-wider">
+                      {cardTitle}
+                    </p>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800">
+                      {badgeText}
+                    </span>
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 font-display truncate">
+                    {cardValue}
+                  </h3>
+
+                  {revenueViewIndex === 1 && (
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex my-1.5">
+                      <div style={{ width: `${cashPct}%` }} className="bg-emerald-500 h-full" />
+                      <div style={{ width: `${upiPct}%` }} className="bg-indigo-500 h-full" />
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-400 mt-1 font-sans truncate">
+                    {cardSub}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg border shrink-0 transition-transform duration-150 group-hover:scale-105 text-emerald-600 bg-emerald-50 border-emerald-100">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* View Dots Pagination */}
+              <div
+                className="flex items-center space-x-1.5 mt-3 pt-2 border-t border-slate-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {[
+                  { idx: 0, label: "Total Revenue" },
+                  { idx: 1, label: "Cash vs UPI" },
+                  { idx: 2, label: "Today's Revenue" }
+                ].map(({ idx, label }) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setRevenueViewIndex(idx)}
+                    title={label}
+                    className={`h-1.5 rounded-full transition-all ${
+                      revenueViewIndex === idx
+                        ? "bg-emerald-600 w-4"
+                        : "bg-slate-200 hover:bg-slate-300 w-1.5"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Card 3: Logged-in Members */}
+        <div
+          onClick={() => setActiveTab("customers")}
+          className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision hover:border-slate-300 hover:shadow-precision-md transition-all cursor-pointer group"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 font-mono uppercase tracking-wider mb-2">
+                Logged-in Members
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 font-display">
+                {activeMembersCount}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1.5 font-sans">
+                Identified customers on PCs
+              </p>
+            </div>
+            <div className="p-3 rounded-lg border shrink-0 transition-transform duration-150 group-hover:scale-105 text-purple-600 bg-purple-50 border-purple-100">
+              <Users className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Under Maintenance */}
+        <div
+          onClick={() => setActiveTab("live_pcs")}
+          className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision hover:border-slate-300 hover:shadow-precision-md transition-all cursor-pointer group"
+        >
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 font-mono uppercase tracking-wider mb-2">
+                Under Maintenance
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 font-display">
+                {maintenanceCount}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1.5 font-sans">
+                Hardware diagnostics pending
+              </p>
+            </div>
+            <div className={`p-3 rounded-lg border shrink-0 transition-transform duration-150 group-hover:scale-105 ${maintenanceCount > 0 ? "text-amber-600 bg-amber-50 border-amber-100" : "text-slate-400 bg-slate-50 border-slate-100"}`}>
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Core Split Section */}
@@ -170,7 +307,7 @@ export default function DashboardView({ currency, pcs,
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h4 className="text-sm font-bold text-slate-800 font-display">Lounge Grid Live Status</h4>
+                <h4 className="text-sm font-bold text-slate-800 font-display">Lounge Status</h4>
                 <p className="text-xs text-slate-400">Click Live PCs in sidebar for hardware specs or session extension</p>
               </div>
               <button 
@@ -200,7 +337,9 @@ export default function DashboardView({ currency, pcs,
                     className={`aspect-square rounded-lg border text-[10px] font-bold font-mono flex flex-col items-center justify-center cursor-pointer transition-all ${statusColor}`}
                   >
                     <Monitor className="w-3.5 h-3.5 mb-1 opacity-80" />
-                    <span>{pc.id.split("-")[1].toUpperCase()}</span>
+                    <span className="max-w-full text-center line-clamp-2 leading-tight break-words font-sans text-[10px]">
+                      {pc.name?.trim() || (pc.stationNumber ? `Station ${pc.stationNumber}` : (pc.id.includes("-") ? pc.id.split("-")[1].toUpperCase() : pc.id))}
+                    </span>
                   </div>
                 );
               })}
