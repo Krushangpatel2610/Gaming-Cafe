@@ -49,7 +49,7 @@ interface LivePCsViewProps {
   onLockPC: (pcId: string) => void;
   onUnlockPC: (pcId: string) => void;
   onForceLogoutPC?: (pcId: string) => void;
-  onPowerTogglePC?: (pcId: string, turnOn: boolean) => void;
+  onPowerTogglePC?: (pcId: string) => void;
   onAddSystem: (body: CreateSystemBody) => Promise<{ systemId: string; apiKey: string } | null>;
   onEditSystem: (pcId: string, body: UpdateSystemBody) => Promise<boolean>;
   onCreateSystemType: (name: string, hourlyBaseRate: number) => Promise<string | null>;
@@ -123,7 +123,7 @@ export default function LivePCsView({ currency, pcs,
 
   // Modal State for Force Logout & Real Power Off/On
   const [forceLogoutTarget, setForceLogoutTarget] = useState<PC | null>(null);
-  const [powerTarget, setPowerTarget] = useState<{ pc: PC; turnOn: boolean } | null>(null);
+  const [powerTarget, setPowerTarget] = useState<{ pc: PC } | null>(null);
 
   // Modal State for extending a session
   const [extendSessionPCId, setExtendSessionPCId] = useState<string | null>(null);
@@ -684,13 +684,13 @@ export default function LivePCsView({ currency, pcs,
                         </button>
 
                         <button
+                          disabled={pc.status === PCStatus.OFFLINE}
                           onClick={() => {
-                            const turnOn = pc.status === PCStatus.OFFLINE;
+                            if (pc.status === PCStatus.OFFLINE) return;
                             if (onPowerTogglePC) {
-                              setPowerTarget({ pc, turnOn });
+                              setPowerTarget({ pc });
                             } else {
-                              const nextStatus = turnOn ? PCStatus.AVAILABLE : PCStatus.OFFLINE;
-                              onUpdatePCStatus(pc.id, nextStatus);
+                              onUpdatePCStatus(pc.id, PCStatus.OFFLINE);
                             }
                           }}
                           className={`p-1.5 border rounded-lg ${
@@ -698,7 +698,7 @@ export default function LivePCsView({ currency, pcs,
                               ? "bg-slate-800 text-slate-400 border-slate-900 hover:bg-slate-700"
                               : "bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
                           }`}
-                          title={pc.status === PCStatus.OFFLINE ? "Turn station ON (Wake-on-LAN)" : "Turn station OFF (Physically shut down PC)"}
+                          title={pc.status === PCStatus.OFFLINE ? "This PC is off. Switch it on at the machine." : "Turn station OFF (Physically shut down PC)"}
                         >
                           <Power className="w-3.5 h-3.5" />
                         </button>
@@ -1660,13 +1660,11 @@ export default function LivePCsView({ currency, pcs,
           >
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <div className={`p-2 rounded-lg ${powerTarget.turnOn ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>
+                <div className="p-2 rounded-lg bg-red-50 text-red-600">
                   <Power className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800 text-sm">
-                    {powerTarget.turnOn ? "Power On Station" : "Turn Station Off"}
-                  </h3>
+                  <h3 className="font-bold text-slate-800 text-sm">Turn Station Off</h3>
                   <p className="text-xs text-slate-500">{powerTarget.pc.name}</p>
                 </div>
               </div>
@@ -1678,11 +1676,7 @@ export default function LivePCsView({ currency, pcs,
               </button>
             </div>
             <div className="p-5 space-y-3">
-              {powerTarget.turnOn ? (
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Send Wake-on-LAN magic packet through an active relay station to wake <span className="font-semibold text-slate-800">{powerTarget.pc.name}</span>.
-                </p>
-              ) : (
+              {(
                 <>
                   <p className="text-xs text-slate-600 leading-relaxed">
                     This will physically send an OS shutdown command (<code className="bg-slate-100 px-1 py-0.5 rounded text-[11px]">shutdown /s /f</code>) to <span className="font-semibold text-slate-800">{powerTarget.pc.name}</span>.
@@ -1713,16 +1707,14 @@ export default function LivePCsView({ currency, pcs,
                 type="button"
                 onClick={() => {
                   if (onPowerTogglePC && powerTarget) {
-                    onPowerTogglePC(powerTarget.pc.id, powerTarget.turnOn);
+                    onPowerTogglePC(powerTarget.pc.id);
                   }
                   setPowerTarget(null);
                 }}
-                className={`px-4 py-2 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 ${
-                  powerTarget.turnOn ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
-                }`}
+                className="px-4 py-2 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 bg-red-600 hover:bg-red-700"
               >
                 <Power className="w-3.5 h-3.5" />
-                <span>{powerTarget.turnOn ? "Send Wake Signal" : "Turn Station Off"}</span>
+                <span>Turn Station Off</span>
               </button>
             </div>
           </motion.div>

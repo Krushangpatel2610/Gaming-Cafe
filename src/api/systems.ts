@@ -87,7 +87,3 @@ export function powerOffSystem(storeId: string, systemId: string, force = false)
   return apiPost<PowerCommandResult>(`/stores/${storeId}/systems/${systemId}/power-off`, { force });
 }
 
-export function powerOnSystem(storeId: string, systemId: string): Promise<PowerCommandResult> {
-  return apiPost<PowerCommandResult>(`/stores/${storeId}/systems/${systemId}/power-on`);
-}
-

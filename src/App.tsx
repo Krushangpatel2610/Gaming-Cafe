@@ -23,7 +23,7 @@ import TeamView from "./components/TeamView";
 import StoreSettingsView from "./components/StoreSettingsView";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ApiError } from "./api/client";
-import { listLiveSystems, updateSystem, lockSystem, unlockSystem, forceLogoutSystem, powerOffSystem, powerOnSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
+import { listLiveSystems, updateSystem, lockSystem, unlockSystem, forceLogoutSystem, powerOffSystem, createSystem, deactivateSystem, regenerateSystemKey, CreateSystemBody, UpdateSystemBody } from "./api/systems";
 import { listActiveSessions, listSessions, startManualSession, endSession, extendSession, endBreak } from "./api/sessions";
 import { createWalkInBooking } from "./api/bookings";
 import { adaptSystemToPC, adaptSessionToUI, pcStatusToApiStatus } from "./api/adapters";
@@ -451,19 +451,15 @@ function Dashboard() {
     }
   };
 
-  // HANDLER: Real hardware power off (shutdown OS) or power on (Wake-on-LAN)
-  const handlePowerTogglePC = async (pcId: string, turnOn: boolean) => {
+  // HANDLER: Real hardware power off (shuts the PC down). There is no remote
+  // power-on: a switched-off PC has to be started at the machine.
+  const handlePowerTogglePC = async (pcId: string) => {
     if (!storeId) return;
     const pc = pcs.find(p => p.id === pcId);
     if (!pc) return;
     try {
-      if (turnOn) {
-        const result = await powerOnSystem(storeId, pcId);
-        addLog("PC", result.message || `Wake-on-LAN dispatched for ${pc.name}.`, result.delivered ? "success" : "warning");
-      } else {
-        const result = await powerOffSystem(storeId, pcId, true);
-        addLog("PC", result.message || `Shutdown signal dispatched to ${pc.name}.`, result.delivered ? "warning" : "info");
-      }
+      const result = await powerOffSystem(storeId, pcId, true);
+      addLog("PC", result.message || `Shutdown signal dispatched to ${pc.name}.`, result.delivered ? "warning" : "info");
       await refreshLiveData();
     } catch (err) {
       addLog("System", `Power operation on ${pc.name} failed: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
