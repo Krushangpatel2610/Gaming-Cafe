@@ -70,7 +70,14 @@ export interface ApiListResult<T> {
   meta?: ApiEnvelope<T>["meta"];
 }
 
-let isRefreshing = false;
+// All requests that hit an expired token at the same time share ONE refresh.
+// Previously a second request saw "already refreshing", skipped the refresh and
+// signed the user out even though the refresh was about to succeed.
+type RefreshResult =
+  | { status: "ok"; token: string }
+  | { status: "rejected" } // the server refused the refresh token (really signed out)
+  | { status: "network" }; // could not reach the server: keep the session
+let refreshPromise: Promise<RefreshResult> | null = null;
 
 export function buildUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path;
@@ -78,31 +85,50 @@ export function buildUrl(path: string): string {
   return `${BASE_URL}${normalizedPath}`;
 }
 
-async function tryRefresh(): Promise<string | null> {
+function refreshOnce(): Promise<RefreshResult> {
+  if (!refreshPromise) {
+    refreshPromise = tryRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
+async function tryRefresh(): Promise<RefreshResult> {
   const sessionType = localStorage.getItem(SESSION_TYPE_KEY);
-  if (sessionType !== "user" && sessionType !== "admin") return null;
+  if (sessionType !== "user" && sessionType !== "admin") return { status: "rejected" };
 
   const refreshKey = sessionType === "admin" ? ADMIN_REFRESH_KEY : USER_REFRESH_KEY;
   const refreshPath = sessionType === "admin" ? "/auth/admin/refresh" : "/auth/refresh";
 
   const storage = getAuthStorage();
   const refreshToken = storage.getItem(refreshKey);
-  if (!refreshToken) return null;
+  if (!refreshToken) return { status: "rejected" };
 
+  let response: Response;
   try {
-    const response = await fetch(buildUrl(refreshPath), {
+    response = await fetch(buildUrl(refreshPath), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!response.ok) return null;
+  } catch {
+    // Offline or the server is restarting: not a reason to sign the user out.
+    return { status: "network" };
+  }
+
+  // A server error (5xx) is also not a sign-out reason; only a refusal is.
+  if (response.status >= 500) return { status: "network" };
+  if (!response.ok) return { status: "rejected" };
+
+  try {
     const body = await response.json();
-    if (!body.success || !body.data?.accessToken) return null;
+    if (!body.success || !body.data?.accessToken) return { status: "rejected" };
     setStoredToken(body.data.accessToken);
     storage.setItem(refreshKey, body.data.refreshToken);
-    return body.data.accessToken as string;
+    return { status: "ok", token: body.data.accessToken as string };
   } catch {
-    return null;
+    return { status: "network" };
   }
 }
 
@@ -125,10 +151,21 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
   }
 
   // Auto-refresh on 401 for user and admin sessions
-  if (response.status === 401 && !isRefreshing) {
-    isRefreshing = true;
-    const newToken = await tryRefresh();
-    isRefreshing = false;
+  const isAuthEndpoint = path.includes("/auth/login") || path.includes("/auth/admin/login");
+  if (response.status === 401 && !isAuthEndpoint) {
+    // Another request may already have refreshed while this one was in flight.
+    const latest = getStoredToken();
+    let newToken: string | null = null;
+    if (latest && latest !== token) {
+      newToken = latest;
+    } else {
+      const result = await refreshOnce();
+      if (result.status === "ok") {
+        newToken = result.token;
+      } else if (result.status === "network") {
+        throw new ApiError("Unable to reach the server. Check your connection.", "NETWORK_ERROR", 0);
+      }
+    }
 
     if (newToken) {
       headers["Authorization"] = `Bearer ${newToken}`;
