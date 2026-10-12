@@ -251,6 +251,7 @@ export interface ApiBillingEntry {
   storeId: string;
   sessionId: string;
   userId: string | null;
+  userName?: string | null;
   systemId: string;
   billedFrom: string;
   billedUntil: string;

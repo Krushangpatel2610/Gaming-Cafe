@@ -69,10 +69,11 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
   const [restockModalBev, setRestockModalBev] = useState<ApiBeverage | null>(null);
   const [addStockAmount, setAddStockAmount] = useState<number>(6);
 
-  const loadBeverages = async () => {
+  // silent = background refresh: update the data without flashing a loading state.
+  const loadBeverages = async (silent = false) => {
     if (!storeId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await listBeverages(storeId);
       setBeverages(data);
     } catch (err: any) {
@@ -82,10 +83,10 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
     }
   };
 
-  const loadOrders = async () => {
+  const loadOrders = async (silent = false) => {
     if (!storeId) return;
     try {
-      setLoadingOrders(true);
+      if (!silent) setLoadingOrders(true);
       const data = await listBeverageOrders(storeId, ordersFilter === "all" ? undefined : ordersFilter);
       setOrders(data);
     } catch (err: any) {
@@ -102,10 +103,21 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
   useEffect(() => {
     if (activeTab === "orders") {
       loadOrders();
-      const interval = setInterval(loadOrders, 8000);
+      const interval = setInterval(() => {
+        loadOrders(true);
+        loadBeverages(true); // stock numbers change when drinks are ordered
+      }, 8000);
       return () => clearInterval(interval);
     }
   }, [storeId, activeTab, ordersFilter]);
+
+  // On the menu tab, keep stock numbers fresh too (paused while a form is open).
+  useEffect(() => {
+    if (activeTab !== "orders" && !isModalOpen && !restockModalBev) {
+      const interval = setInterval(() => loadBeverages(true), 8000);
+      return () => clearInterval(interval);
+    }
+  }, [storeId, activeTab, isModalOpen, restockModalBev]);
 
   const handleOpenModal = (bev?: ApiBeverage) => {
     setErrorMsg(null);
@@ -333,7 +345,7 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
               />
             </div>
             <button
-              onClick={loadBeverages}
+              onClick={() => loadBeverages()}
               className="p-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs flex items-center gap-1.5"
               title="Refresh catalog"
             >
@@ -503,7 +515,7 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
               ))}
             </div>
             <button
-              onClick={loadOrders}
+              onClick={() => loadOrders()}
               className="p-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-xs flex items-center gap-1.5"
             >
               <RefreshCw className="w-3.5 h-3.5" />

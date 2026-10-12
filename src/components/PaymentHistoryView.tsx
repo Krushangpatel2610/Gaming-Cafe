@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, RefreshCw, Search } from "lucide-react";
 import { formatCurrency } from "../lib/currency";
 import { ApiError } from "../api/client";
@@ -71,6 +71,10 @@ export default function PaymentHistoryView({ currency, customers, onNotify }: Pa
   const { storeId } = useAuth();
 
   const [rows, setRows] = useState<HistoryRow[]>([]);
+  // The parent passes a new onNotify function on every render. Keeping it in a ref
+  // stops it from re-triggering the load effect (which caused endless reloading).
+  const notifyRef = useRef(onNotify);
+  notifyRef.current = onNotify;
   const [loading, setLoading] = useState<boolean>(true);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [fetchedPages, setFetchedPages] = useState<number>(0);
@@ -179,11 +183,11 @@ export default function PaymentHistoryView({ currency, customers, onNotify }: Pa
       setFetchedPages(1);
       setPage(1);
     } catch (err) {
-      onNotify(`Failed to load payment history: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      notifyRef.current(`Failed to load payment history: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     } finally {
       setLoading(false);
     }
-  }, [storeId, fetchPage, onNotify]);
+  }, [storeId, fetchPage]);
 
   const loadOlder = async () => {
     setLoadingMore(true);
@@ -196,7 +200,7 @@ export default function PaymentHistoryView({ currency, customers, onNotify }: Pa
       setHasMore(res.more);
       setFetchedPages((n) => n + 1);
     } catch (err) {
-      onNotify(`Failed to load older payments: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+      notifyRef.current(`Failed to load older payments: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     } finally {
       setLoadingMore(false);
     }

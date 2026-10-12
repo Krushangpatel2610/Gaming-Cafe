@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listBillingLedger, getBillingDetail, generateBill, applyBillingOverride, getRevenueSummary } from "../api/billing";
 import { ApiBillingEntry, ApiBillingOverride, ApiBillingRevenueSummary } from "../api/types";
+import { listBeverageOrders, ApiBeverageOrder } from "../api/beverages";
 import { Session } from "../types";
 
 interface BillingViewProps {
@@ -16,6 +17,7 @@ interface BillingViewProps {
 
 export default function BillingView({ currency, sessions, onNotify }: BillingViewProps) {
   const { storeId, admin } = useAuth();
+  const [beverageOrders, setBeverageOrders] = useState<ApiBeverageOrder[]>([]);
   const [ledger, setLedger] = useState<ApiBillingEntry[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
@@ -59,6 +61,30 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
     refreshLedger();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, page]);
+
+  // Beverages that were actually bought (paid or handed over). Rejected ones are not sales.
+  useEffect(() => {
+    if (!storeId) return;
+    (async () => {
+      try {
+        const [paid, delivered] = await Promise.all([
+          listBeverageOrders(storeId, "paid"),
+          listBeverageOrders(storeId, "delivered"),
+        ]);
+        setBeverageOrders([...paid, ...delivered].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+      } catch {
+        setBeverageOrders([]);
+      }
+    })();
+  }, [storeId]);
+
+  const playerName = (b: ApiBillingEntry) =>
+    b.userName || (b.userId ? `Player ${b.userId.slice(0, 6)}` : "Walk-in guest");
+
+  const beverageTotal = useMemo(
+    () => beverageOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || "0"), 0),
+    [beverageOrders],
+  );
 
   useEffect(() => {
     refreshSummary();
@@ -179,6 +205,7 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
           <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-mono uppercase text-[10px]">
             <tr>
               <th className="text-left px-4 py-3">Date</th>
+              <th className="text-left px-4 py-3">Player</th>
               <th className="text-left px-4 py-3">Session</th>
               <th className="text-left px-4 py-3">Minutes</th>
               <th className="text-left px-4 py-3">Gross</th>
@@ -190,11 +217,12 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
           </thead>
           <tbody className="divide-y divide-slate-50">
             {ledger.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-8 text-slate-400">{loading ? "Loading…" : "No billing records yet."}</td></tr>
+              <tr><td colSpan={9} className="text-center py-8 text-slate-400">{loading ? "Loading…" : "No billing records yet."}</td></tr>
             ) : (
               ledger.map((b) => (
                 <tr key={b.id} className="hover:bg-slate-50/60 cursor-pointer" onClick={() => openDetail(b.id)}>
                   <td className="px-4 py-3 font-mono text-slate-500">{new Date(b.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700">{playerName(b)}</td>
                   <td className="px-4 py-3 font-mono text-slate-400">{b.sessionId.slice(0, 8)}</td>
                   <td className="px-4 py-3 text-slate-600">{b.billedMinutes}m</td>
                   <td className="px-4 py-3 font-mono text-slate-600">{formatCurrency(parseFloat(b.grossAmount).toFixed(2), currency)}</td>
@@ -216,6 +244,50 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
         </div>
       </div>
 
+      {/* Beverage sales */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-precision overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 font-display">Beverage Sales</h3>
+            <p className="text-[11px] text-slate-400">Drinks that were paid for, with the player who bought them.</p>
+          </div>
+          <div className="text-right">
+            <span className="text-slate-400 text-[10px] font-mono uppercase block">Total</span>
+            <span className="font-mono font-bold text-slate-900">{formatCurrency(beverageTotal.toFixed(2), currency)}</span>
+          </div>
+        </div>
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-mono uppercase text-[10px]">
+            <tr>
+              <th className="text-left px-4 py-3">Date</th>
+              <th className="text-left px-4 py-3">Player</th>
+              <th className="text-left px-4 py-3">PC</th>
+              <th className="text-left px-4 py-3">Items</th>
+              <th className="text-left px-4 py-3">Paid with</th>
+              <th className="text-left px-4 py-3">Status</th>
+              <th className="text-left px-4 py-3">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {beverageOrders.length === 0 ? (
+              <tr><td colSpan={7} className="text-center py-8 text-slate-400">No beverages sold yet.</td></tr>
+            ) : (
+              beverageOrders.map((o) => (
+                <tr key={o.id}>
+                  <td className="px-4 py-3 font-mono text-slate-500">{new Date(o.createdAt).toLocaleString()}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700">{o.user?.name || o.user?.username || "Unknown player"}</td>
+                  <td className="px-4 py-3 text-slate-600">{o.system?.name || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600">{(o.items ?? []).map((i) => `${i.quantity}× ${i.name}`).join(", ") || "—"}</td>
+                  <td className="px-4 py-3 text-slate-600 capitalize">{o.paymentMethod === "credits" ? "Wallet" : o.paymentMethod}</td>
+                  <td className="px-4 py-3 text-slate-600 capitalize">{o.status.replace(/_/g, " ")}</td>
+                  <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(o.totalAmount).toFixed(2), currency)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {/* MODAL: Billing detail + override */}
       {selected && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -229,6 +301,7 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
             </div>
             <div className="p-5 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2"><span className="text-slate-400 block">Paid by</span><span className="font-semibold text-slate-800">{playerName(selected.billing)}</span></div>
                 <div><span className="text-slate-400 block">Billed window</span><span className="font-mono text-slate-700">{new Date(selected.billing.billedFrom).toLocaleTimeString()} – {new Date(selected.billing.billedUntil).toLocaleTimeString()}</span></div>
                 <div><span className="text-slate-400 block">Minutes</span><span className="font-semibold text-slate-700">{selected.billing.billedMinutes}m</span></div>
                 <div><span className="text-slate-400 block">Base rate</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.baseRate).toFixed(2), currency)}/hr</span></div>
