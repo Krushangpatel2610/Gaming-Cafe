@@ -385,11 +385,11 @@ export default function DashboardView({ currency, storeId, pcs,
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400 font-semibold font-mono uppercase tracking-wider text-[10px]">
-                    <th className="py-3">Terminal</th>
-                    <th className="py-3">Gamer Name</th>
-                    <th className="py-3">Start Time</th>
-                    <th className="py-3">Remaining Time</th>
-                    <th className="py-3 text-right">Running Total</th>
+                    <th className="py-3 pr-4">Terminal</th>
+                    <th className="py-3 px-4">Gamer Name</th>
+                    <th className="py-3 px-4">Start Time</th>
+                    <th className="py-3 px-4">Remaining Time</th>
+                    <th className="py-3 pl-4 text-right">Running Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -408,15 +408,51 @@ export default function DashboardView({ currency, storeId, pcs,
                         return `${h}h ${m}m remaining`;
                       };
                       const activeSession = sessions.find(s => s.pcId === pc.id && s.status === "Active");
+                      const isUUID = (val?: string | null) =>
+                        Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
+                      const userKey = (pc.currentUser && isUUID(pc.currentUser))
+                        ? pc.currentUser
+                        : (activeSession?.customerId && isUUID(activeSession.customerId))
+                        ? activeSession.customerId
+                        : null;
+
+                      const cust = userKey && customers ? customers.find(c => c.userId === userKey || (c as any).id === userKey) : undefined;
+
+                      let gamerName = pc.currentUser;
+                      if (!gamerName || isUUID(gamerName)) {
+                        if (cust?.name && !isUUID(cust.name)) {
+                          gamerName = cust.name;
+                        } else if (activeSession?.customerName && !isUUID(activeSession.customerName)) {
+                          gamerName = activeSession.customerName;
+                        } else if (cust?.email) {
+                          gamerName = cust.email;
+                        } else if (cust?.phone) {
+                          gamerName = cust.phone;
+                        } else if (activeSession?.customerPhone) {
+                          gamerName = activeSession.customerPhone;
+                        } else {
+                          gamerName = "Guest User";
+                        }
+                      }
 
                       return (
                         <tr key={pc.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3.5 font-bold font-mono text-indigo-600">{pc.name.split(" ")[0]}</td>
-                          <td className="py-3.5 font-semibold text-slate-700">{pc.currentUser || "Guest User"}</td>
-                          <td className="py-3.5 text-slate-500 font-mono">
+                          <td className="py-3.5 pr-4 font-bold font-mono text-indigo-600">{pc.name.split(" ")[0]}</td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-700">
+                            <span title={cust?.email ? `Email: ${cust.email}${cust.phone ? ` • Phone: ${cust.phone}` : ""}` : undefined}>
+                              {gamerName}
+                            </span>
+                            {cust?.email && gamerName !== cust.email && (
+                              <span className="block text-[10px] text-slate-400 font-mono font-normal truncate max-w-[200px]">
+                                {cust.email}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-500 font-mono">
                             {activeSession ? new Date(activeSession.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
                           </td>
-                          <td className="py-3.5 font-semibold">
+                          <td className="py-3.5 px-4 font-semibold">
                             <span className={`inline-flex items-center space-x-1 text-[11px] px-2 py-0.5 rounded-full ${
                               pc.timeRemaining && pc.timeRemaining < 900
                                 ? "bg-red-50 text-red-700 border border-red-100 animate-pulse"
@@ -426,7 +462,7 @@ export default function DashboardView({ currency, storeId, pcs,
                               <span>{formatTime(pc.timeRemaining)}</span>
                             </span>
                           </td>
-                          <td className="py-3.5 text-right font-bold text-slate-900 font-mono">
+                          <td className="py-3.5 pl-4 text-right font-bold text-slate-900 font-mono">
                             {formatCurrency((activeSession?.totalCost ?? 0).toFixed(2), currency)}
                           </td>
                         </tr>

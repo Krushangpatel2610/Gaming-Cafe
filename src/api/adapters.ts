@@ -71,6 +71,46 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
     timeRemaining = Math.max(0, Math.round((endsAtMs - Date.now()) / 1000));
   }
 
+  const isUUID = (val: string | null | undefined): boolean =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
+  const targetUserId = activeSession?.userId || system.currentSession?.userId;
+  const matchedCustomer = targetUserId && Array.isArray(customers)
+    ? customers.find((c: any) => c.userId === targetUserId || c.id === targetUserId)
+    : undefined;
+
+  const candidateNames = [
+    matchedCustomer?.name,
+    system.currentSession?.userName,
+    (activeSession as any)?.userName,
+  ];
+
+  let resolvedUserName: string | undefined = undefined;
+  for (const cand of candidateNames) {
+    if (cand && typeof cand === "string" && cand.trim() && !isUUID(cand)) {
+      resolvedUserName = cand.trim();
+      break;
+    }
+  }
+
+  if (!resolvedUserName && (activeSession || system.currentSession)) {
+    if (matchedCustomer?.phone) {
+      resolvedUserName = matchedCustomer.phone;
+    } else if (activeSession?.walkInPhone) {
+      resolvedUserName = activeSession.walkInPhone;
+    } else if (targetUserId) {
+      resolvedUserName = `Member ${targetUserId.slice(0, 6)}`;
+    } else {
+      resolvedUserName = "Guest";
+    }
+  }
+
+  const resolvedUserPhone =
+    matchedCustomer?.phone ||
+    (activeSession as any)?.userPhone ||
+    activeSession?.walkInPhone ||
+    null;
+
   return {
     id: system.id,
     name: system.name,
@@ -84,14 +124,15 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
       monitor: specs.monitor || "Unknown",
     },
     activeSessionId: activeSession?.id ?? system.currentSession?.sessionId,
-    currentUser: activeSession
-      ? activeSession.walkInPhone || activeSession.userId || "Guest"
-      : system.currentSession?.userName || (system.currentSession ? "Guest" : undefined),
+    currentUser: resolvedUserName,
+    currentUserPhone: resolvedUserPhone,
     timeRemaining,
     systemTypeId: system.systemTypeId,
     stationNumber: system.stationNumber != null && system.stationNumber !== "" ? Number(system.stationNumber) : null,
     platform: system.platform ?? null,
     targetCapMinutes: targetCap,
+    initialCapMinutes: (activeSession as any)?.initialCapMinutes ?? system.currentSession?.initialCapMinutes ?? null,
+    extensionMinutes: (activeSession as any)?.extensionMinutes ?? (system.currentSession as any)?.extensionMinutes ?? null,
     capChoiceMade: capChoiceMade,
     inBreak: activeSession?.inBreak ?? system.currentSession?.inBreak ?? Boolean(activeSession?.breakStartedAt || system.currentSession?.breakStartedAt),
     breakStartedAt: activeSession?.breakStartedAt ?? system.currentSession?.breakStartedAt ?? null,
@@ -102,7 +143,9 @@ export function adaptSessionToUI(
   session: ApiSession,
   pcName: string,
   ratePerHour: number,
-  customerName: string
+  customerName: string,
+  customerPhone?: string | null,
+  pc?: PC
 ): Session {
   const durationMinutes = session.durationMinutes ?? 60;
   const startedAtMs = new Date(session.startedAt).getTime();
@@ -118,12 +161,21 @@ export function adaptSessionToUI(
   const paymentStatus: Session["paymentStatus"] =
     unpaid > 0 ? "Unpaid" : session.isBilled ? "Paid" : "Unpaid";
 
+  const initialCapMinutes = session.initialCapMinutes ?? pc?.initialCapMinutes ?? null;
+  const targetCapMinutes = session.targetCapMinutes ?? pc?.targetCapMinutes ?? null;
+  const extensionMinutes = session.extensionMinutes ?? pc?.extensionMinutes ?? (
+    targetCapMinutes && initialCapMinutes && targetCapMinutes > initialCapMinutes
+      ? targetCapMinutes - initialCapMinutes
+      : null
+  );
+
   return {
     id: session.id,
     pcId: session.systemId,
     pcName,
     customerName,
     customerId: session.userId || undefined,
+    customerPhone: customerPhone ?? null,
     startTime: session.startedAt,
     endTime: session.endedAt || undefined,
     durationMinutes,
@@ -133,5 +185,8 @@ export function adaptSessionToUI(
     status,
     paymentStatus,
     unpaidAmount: unpaid > 0 ? unpaid : undefined,
+    initialCapMinutes,
+    targetCapMinutes,
+    extensionMinutes,
   };
 }

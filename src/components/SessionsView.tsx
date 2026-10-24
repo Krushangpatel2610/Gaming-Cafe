@@ -29,6 +29,7 @@ interface SessionsViewProps {
 
 export default function SessionsView({ currency, sessions,
   pcs,
+  customers = [],
   systemTypes,
   settings,
   onStopSession
@@ -67,18 +68,48 @@ export default function SessionsView({ currency, sessions,
   };
 
   const renderDurationCap = (sess: Session) => {
-    const init = sess.initialCapMinutes ?? (sess.targetCapMinutes ? sess.targetCapMinutes - (sess.extensionMinutes || 0) : null);
+    const pc = pcs.find(p => p.id === sess.pcId);
+    const init = sess.initialCapMinutes ?? pc?.initialCapMinutes ?? (sess.targetCapMinutes ? sess.targetCapMinutes - (sess.extensionMinutes || pc?.extensionMinutes || 0) : null);
     if (init != null && init > 0) {
       const initH = Math.floor(init / 60);
       const initM = init % 60;
       const initStr = `${initH > 0 ? `${initH}h ` : ""}${initM > 0 || initH === 0 ? `${initM}m` : ""}`.trim();
-      const ext = sess.extensionMinutes || 0;
+      const ext = sess.extensionMinutes ?? pc?.extensionMinutes ?? 0;
       const extH = Math.floor(ext / 60);
       const extM = ext % 60;
-      const extStr = ext > 0 ? ` + ${extH > 0 ? `${extH}h ` : ""}${extM > 0 || extH === 0 ? `${extM}m` : ""}`.trim() + " ext" : "";
+      const extStr = ext > 0 ? ` + ${extH > 0 ? `${extH}h ` : ""}${extM > 0 || extH === 0 ? `${extM}m` : ""}`.trim() + " extended" : "";
       return `${initStr}${extStr}`;
     }
     return "No limit selected";
+  };
+
+  const resolveGamer = (sess: Session) => {
+    const isUUID = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
+    const userKey = (sess.customerId && isUUID(sess.customerId)) ? sess.customerId : (sess.customerName && isUUID(sess.customerName) ? sess.customerName : null);
+    const cust = userKey && customers ? customers.find(c => c.userId === userKey || (c as any).id === userKey) : undefined;
+
+    let displayName = sess.customerName;
+    if (!displayName || isUUID(displayName)) {
+      if (cust?.name && !isUUID(cust.name)) {
+        displayName = cust.name;
+      } else if (cust?.email) {
+        displayName = cust.email;
+      } else if (cust?.phone) {
+        displayName = cust.phone;
+      } else if (sess.customerPhone) {
+        displayName = sess.customerPhone;
+      } else {
+        displayName = "Guest User";
+      }
+    }
+
+    return {
+      name: displayName,
+      email: cust?.email || null,
+      phone: cust?.phone || sess.customerPhone || null,
+    };
   };
 
   // Calculator state — real system type instead of the old fake PCGroup zone
@@ -192,6 +223,7 @@ export default function SessionsView({ currency, sessions,
                   <th className="p-4">Customer</th>
                   <th className="p-4">Hourly Rate</th>
                   <th className="p-4">Start Time</th>
+                  <th className="p-4">Selected Duration</th>
                   <th className="p-4">Time Left</th>
                   <th className="p-4 text-right">Running Charge</th>
                   <th className="p-4 text-center">Actions</th>
@@ -200,7 +232,7 @@ export default function SessionsView({ currency, sessions,
               <tbody className="divide-y divide-slate-100">
                 {filteredActive.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       No active sessions match the filter criteria.
                     </td>
                   </tr>
@@ -214,17 +246,32 @@ export default function SessionsView({ currency, sessions,
                     };
 
                     const isUrgent = sess.remainingSeconds !== undefined && sess.remainingSeconds < 600;
+                    const gamer = resolveGamer(sess);
 
                     return (
                       <tr key={sess.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-4 font-bold font-mono text-indigo-600">{sess.pcName}</td>
                         <td className="p-4">
-                          <div className="font-semibold text-slate-800">{sess.customerName}</div>
-                          {sess.customerId && <div className="text-[10px] text-slate-400 font-mono">{sess.customerId.slice(0, 8)}</div>}
+                          <div className="font-semibold text-slate-800">{gamer.name}</div>
+                          {gamer.email && gamer.email !== gamer.name && (
+                            <div className="text-[10px] text-slate-400 font-mono">{gamer.email}</div>
+                          )}
+                          {!gamer.email && gamer.phone && (
+                            <div className="text-[10px] text-slate-400 font-mono">{gamer.phone}</div>
+                          )}
                         </td>
                         <td className="p-4 font-mono text-slate-600">{formatCurrency(sess.ratePerHour.toFixed(2), currency)}/hr</td>
                         <td className="p-4 text-slate-500 font-mono">
                           {new Date(sess.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="p-4 text-slate-700 font-mono">
+                          <span className={`px-2.5 py-1 rounded text-[11px] font-semibold inline-block ${
+                            (sess.initialCapMinutes ?? pcs.find(p => p.id === sess.pcId)?.initialCapMinutes ?? sess.targetCapMinutes)
+                              ? "bg-indigo-50 text-indigo-800 border border-indigo-100"
+                              : "bg-slate-100 text-slate-600"
+                          }`}>
+                            {renderDurationCap(sess)}
+                          </span>
                         </td>
                         <td className="p-4">
                           <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
@@ -291,13 +338,17 @@ export default function SessionsView({ currency, sessions,
                       return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     };
 
+                    const gamer = resolveGamer(sess);
+
                     return (
                       <tr key={sess.id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-4 font-mono text-[11px] text-slate-500">{sess.id.slice(0, 8)}</td>
                         <td className="p-4 font-bold text-slate-800">{sess.pcName}</td>
                         <td className="p-4">
-                          <div className="font-semibold text-slate-800">{sess.customerName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">Started: {formatDate(sess.startTime)}</div>
+                          <div className="font-semibold text-slate-800">{gamer.name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {gamer.email && gamer.email !== gamer.name ? `${gamer.email} • ` : ""}Started: {formatDate(sess.startTime)}
+                          </div>
                         </td>
                         <td className="p-4 text-slate-700 font-mono">
                           <span className="font-semibold block">{renderDurationCap(sess)}</span>

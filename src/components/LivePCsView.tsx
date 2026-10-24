@@ -500,6 +500,28 @@ export default function LivePCsView({ currency, pcs,
             return `${h}h ${m}m left`;
           };
 
+          const isUUID = (val?: string | null) =>
+            Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
+          let displayName = pc.currentUser;
+          let displayPhone = pc.currentUserPhone;
+
+          if (!displayName || isUUID(displayName)) {
+            const cust = customers.find(c => (displayName && (c.userId === displayName || c.id === displayName)));
+            if (cust?.name && !isUUID(cust.name)) {
+              displayName = cust.name;
+            } else if (cust?.phone) {
+              displayName = cust.phone;
+            } else if (displayName && isUUID(displayName)) {
+              displayName = `Member ${displayName.slice(0, 6)}`;
+            } else {
+              displayName = "Guest User";
+            }
+            if (!displayPhone && cust?.phone) {
+              displayPhone = cust.phone;
+            }
+          }
+
           return (
             <div
               key={pc.id}
@@ -532,10 +554,10 @@ export default function LivePCsView({ currency, pcs,
                 {pc.status === PCStatus.IN_USE ? (
                   <div className="bg-indigo-50/60 rounded-lg p-3 border border-indigo-100/50 space-y-2">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-1.5" title={pc.currentUserPhone ? `Phone: ${pc.currentUserPhone}` : ""}>
+                      <div className="flex items-center space-x-1.5" title={displayPhone ? `Phone: ${displayPhone}` : displayName}>
                         <Users className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        <span className="text-xs font-bold text-indigo-900 truncate" title={pc.currentUserPhone ? `${pc.currentUser} (${pc.currentUserPhone})` : pc.currentUser}>
-                          {pc.currentUser}
+                        <span className="text-xs font-bold text-indigo-900 truncate" title={displayPhone ? `${displayName} (${displayPhone})` : displayName}>
+                          {displayName}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -598,17 +620,23 @@ export default function LivePCsView({ currency, pcs,
                   </div>
                 )}
 
-                {/* PC specs compact list */}
-                <div className="space-y-1.5 text-xs text-slate-500">
-                  <div className="flex items-center space-x-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="truncate">{pc.specs.gpu}</span>
+                {/* PC specs compact list - only show when defined, never show "Unknown" */}
+                {((pc.specs.gpu && pc.specs.gpu !== "Unknown") || (pc.ip && pc.ip !== "—")) && (
+                  <div className="space-y-1.5 text-xs text-slate-500">
+                    {pc.specs.gpu && pc.specs.gpu !== "Unknown" && (
+                      <div className="flex items-center space-x-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{pc.specs.gpu}</span>
+                      </div>
+                    )}
+                    {pc.ip && pc.ip !== "—" && (
+                      <div className="flex items-center space-x-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-mono text-[10px] text-slate-400">{pc.ip}</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center space-x-1.5">
-                    <Terminal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span className="font-mono text-[10px] text-slate-400">{pc.ip}</span>
-                  </div>
-                </div>
+                )}
 
                 {/* Extended Specs fold-out */}
                 {isDetailActive && (

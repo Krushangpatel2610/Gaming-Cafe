@@ -168,7 +168,7 @@ function Dashboard() {
         // userId (no admin "get user" endpoint exists yet) or a walk-in phone number.
         const customer = s.userId ? customers.find(c => c.userId === s.userId) : undefined;
         const customerName = customer?.name || s.walkInPhone || (s.userId ? `Member ${s.userId.slice(0, 6)}` : "Guest");
-        return adaptSessionToUI(s, pc?.name || s.systemId, rate, customerName, customer?.phone || s.walkInPhone || null);
+        return adaptSessionToUI(s, pc?.name || s.systemId, rate, customerName, customer?.phone || s.walkInPhone || null, pc);
       });
       setSessions(nextSessions);
     } catch (err) {
