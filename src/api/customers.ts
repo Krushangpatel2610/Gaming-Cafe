@@ -1,5 +1,5 @@
 import { apiGet, apiGetPaginated, apiPost } from "./client";
-import { ApiCustomer } from "./types";
+import { ApiCustomer, ApiSuspensionAppeal } from "./types";
 
 export interface ListCustomersParams {
   page?: number;
@@ -61,4 +61,33 @@ export interface CustomerSignupBody {
 
 export function signupAsCustomer(storeId: string, body: CustomerSignupBody): Promise<ApiCustomer> {
   return apiPost<ApiCustomer>(`/stores/${storeId}/customers/signup`, body);
+}
+
+export function listSuspensionAppeals(storeId: string): Promise<ApiSuspensionAppeal[]> {
+  return apiGet<ApiSuspensionAppeal[]>(`/stores/${storeId}/customers/appeals`);
+}
+
+export function resolveSuspensionAppeal(
+  storeId: string,
+  appealId: string,
+  decision: "approved" | "rejected",
+  response?: string
+): Promise<{ success: boolean; appealStatus: string; isSuspended: boolean }> {
+  return apiPost(`/stores/${storeId}/customers/appeals/${appealId}/resolve`, { decision, response });
+}
+
+export function getSuspensionStatus(storeId: string): Promise<{
+  isSuspended: boolean;
+  reason: string | null;
+  suspendedAt: string | null;
+  appealText: string | null;
+  appealStatus: string | null;
+  appealedAt: string | null;
+  appealResponse: string | null;
+}> {
+  return apiGet(`/stores/${storeId}/customers/suspension-status`);
+}
+
+export function submitSuspensionAppeal(storeId: string, appealText: string): Promise<{ success: boolean; message: string }> {
+  return apiPost(`/stores/${storeId}/customers/appeal`, { appealText });
 }

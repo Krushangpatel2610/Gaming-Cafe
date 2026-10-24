@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, ShieldAlert, Send, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getUserDashboard } from "../api/user";
 import { listAvailableSystems } from "../api/systems";
@@ -9,6 +9,7 @@ import { listActiveCampaigns } from "../api/campaigns";
 import { listActiveSystemTypes } from "../api/systemTypes";
 import { listActiveStores } from "../api/stores";
 import { getMyNotifications } from "../api/notifications";
+import { getSuspensionStatus, submitSuspensionAppeal } from "../api/customers";
 import {
   ApiUserDashboard,
   ApiAvailableSystem,
@@ -49,6 +50,18 @@ export default function UserDashboardView() {
   const [storeProfile, setStoreProfile] = useState<ApiStore | null>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
 
+  // Suspension & Appeal States
+  const [suspension, setSuspension] = useState<{
+    isSuspended: boolean;
+    reason: string | null;
+    appealStatus: string | null;
+    appealText: string | null;
+    appealResponse: string | null;
+  } | null>(null);
+  const [appealInput, setAppealInput] = useState<string>("");
+  const [submittingAppeal, setSubmittingAppeal] = useState<boolean>(false);
+  const [appealSuccessMsg, setAppealSuccessMsg] = useState<string | null>(null);
+
   // Loading & Error States
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -70,7 +83,7 @@ export default function UserDashboardView() {
       setError(null);
 
       try {
-        const [dashRes, systemsRes, loyaltyRes, campaignsRes, typesRes, storeRes, notifsRes] =
+        const [dashRes, systemsRes, loyaltyRes, campaignsRes, typesRes, storeRes, notifsRes, suspRes] =
           await Promise.all([
             getUserDashboard(userStoreId),
             listAvailableSystems(userStoreId).catch(() => []),
@@ -80,9 +93,9 @@ export default function UserDashboardView() {
             listActiveStores({ limit: 100 })
               .then(({ data }) => data.find((s) => s.id === userStoreId) || null)
               .catch(() => null),
-            getMyNotifications(1, 10).catch(() => null)
+            getMyNotifications(1, 10).catch(() => null),
+            getSuspensionStatus(userStoreId).catch(() => null)
           ]);
-
 
         setDashboard(dashRes);
         setSystems(systemsRes);
@@ -91,6 +104,7 @@ export default function UserDashboardView() {
         setSystemTypes(typesRes);
         if (storeRes) setStoreProfile(storeRes);
         if (notifsRes) setUnreadNotificationsCount(notifsRes.meta?.unreadCount || 0);
+        if (suspRes) setSuspension(suspRes);
       } catch (err) {
         setError(err instanceof ApiError ? err.message : "Couldn't connect to gaming lounge server.");
       } finally {
@@ -100,6 +114,22 @@ export default function UserDashboardView() {
     },
     [userStoreId]
   );
+
+  const handleSubmitAppeal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userStoreId || !appealInput.trim()) return;
+    setSubmittingAppeal(true);
+    try {
+      await submitSuspensionAppeal(userStoreId, appealInput.trim());
+      setAppealSuccessMsg("Appeal submitted successfully! Store management will review your request.");
+      setSuspension(prev => prev ? { ...prev, appealStatus: "pending", appealText: appealInput.trim() } : null);
+      setAppealInput("");
+    } catch (err: any) {
+      alert(err?.message || "Failed to submit appeal");
+    } finally {
+      setSubmittingAppeal(false);
+    }
+  };
 
   // Initial fetch and 15s auto-poll
   useEffect(() => {
@@ -193,6 +223,83 @@ export default function UserDashboardView() {
 
         {/* View Switcher Main Content Area */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 pb-24 md:pb-8">
+          {suspension?.isSuspended && (
+            <div className="mb-6 rounded-2xl bg-gradient-to-r from-red-950/80 via-red-900/60 to-red-950/80 border-2 border-red-500/50 p-5 shadow-2xl text-slate-100 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-600/30 border border-red-500/40 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base font-bold text-white font-display flex items-center gap-2">
+                    <span>Account Suspended at {loungeName}</span>
+                    <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-red-500 text-white font-bold">
+                      Restricted
+                    </span>
+                  </h3>
+                  <p className="text-xs text-red-200/90 mt-1">
+                    Your account is currently suspended from signing in or starting sessions on physical gaming stations.
+                  </p>
+                  {suspension.reason && (
+                    <div className="mt-2 text-xs bg-black/40 border border-red-500/30 rounded-lg p-2.5 text-red-200">
+                      <strong className="text-red-400">Suspension Reason:</strong> {suspension.reason}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {appealSuccessMsg && (
+                <div className="p-3 bg-emerald-950/70 border border-emerald-500/40 rounded-xl text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{appealSuccessMsg}</span>
+                </div>
+              )}
+
+              {suspension.appealStatus === "pending" ? (
+                <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 text-xs space-y-1">
+                  <div className="text-amber-300 font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    <span>Appeal Under Review</span>
+                  </div>
+                  <p className="text-amber-200/80">
+                    Your statement: "{suspension.appealText}"
+                  </p>
+                  <p className="text-[11px] text-amber-400/70 pt-1">
+                    Store management has been notified. You will receive an update once reviewed.
+                  </p>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmitAppeal} className="space-y-3 pt-1 border-t border-red-500/20">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider font-mono">
+                      {suspension.appealStatus === "rejected" ? "Submit Revised Appeal" : "Submit Suspension Appeal"}
+                    </label>
+                    {suspension.appealResponse && (
+                      <p className="text-[11px] text-red-300 italic mb-1">
+                        Previous review note: {suspension.appealResponse}
+                      </p>
+                    )}
+                    <textarea
+                      required
+                      rows={2}
+                      value={appealInput}
+                      onChange={(e) => setAppealInput(e.target.value)}
+                      placeholder="Explain why the suspension should be lifted or what happened..."
+                      className="w-full px-3 py-2 bg-black/40 border border-red-500/30 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/40"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submittingAppeal || !appealInput.trim()}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-red-900/30 flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{submittingAppeal ? "Submitting..." : "Send Appeal to Staff"}</span>
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
+
           {error && (
             <div className="mb-6 flex items-start gap-3 p-4 rounded-2xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs font-mono">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />

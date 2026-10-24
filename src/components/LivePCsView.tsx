@@ -422,8 +422,8 @@ export default function LivePCsView({ currency, pcs,
             Real-time status tracking, hardware profiling, power toggles, and direct terminal management.
           </p>
         </div>
-        <div className="flex items-center space-x-3 shrink-0">
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs overflow-x-auto max-w-full">
             {["All", PCGroup.VIP, PCGroup.STANDARD, PCGroup.CONSOLE, PCGroup.STREAMING].map((group) => (
               <button
                 key={group}
@@ -532,9 +532,11 @@ export default function LivePCsView({ currency, pcs,
                 {pc.status === PCStatus.IN_USE ? (
                   <div className="bg-indigo-50/60 rounded-lg p-3 border border-indigo-100/50 space-y-2">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center space-x-1.5">
-                        <Users className="w-3.5 h-3.5 text-indigo-600" />
-                        <span className="text-xs font-bold text-indigo-900 truncate">{pc.currentUser}</span>
+                      <div className="flex items-center space-x-1.5" title={pc.currentUserPhone ? `Phone: ${pc.currentUserPhone}` : ""}>
+                        <Users className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="text-xs font-bold text-indigo-900 truncate" title={pc.currentUserPhone ? `${pc.currentUser} (${pc.currentUserPhone})` : pc.currentUser}>
+                          {pc.currentUser}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         {pc.inBreak && (
@@ -554,14 +556,34 @@ export default function LivePCsView({ currency, pcs,
                       </div>
                       <span className="font-bold">{formatCurrency(rate.toFixed(2), currency)}/hr</span>
                     </div>
-                    {pc.targetCapMinutes != null && (
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-indigo-100/60 pt-1.5 font-mono">
-                        <span className="text-slate-400">Target Goal:</span>
-                        <span className="bg-indigo-100/80 text-indigo-800 px-1.5 py-0.5 rounded font-semibold">
-                          {Math.floor(pc.targetCapMinutes / 60)}h {pc.targetCapMinutes % 60}m cap
-                        </span>
-                      </div>
-                    )}
+                    <div className="border-t border-indigo-100/60 pt-1.5 text-[10px] font-mono">
+                      {pc.targetCapMinutes != null || pc.initialCapMinutes != null ? (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-slate-400 shrink-0">Duration:</span>
+                          <span className="bg-indigo-100/80 text-indigo-800 px-1.5 py-0.5 rounded font-semibold text-right truncate">
+                            {(() => {
+                              const init = pc.initialCapMinutes ?? pc.targetCapMinutes ?? 60;
+                              const initH = Math.floor(init / 60);
+                              const initM = init % 60;
+                              const initStr = `${initH}h ${initM.toString().padStart(2, '0')}m`;
+                              const remStr = formatRemaining(pc.timeRemaining);
+                              const ext = pc.extensionMinutes ?? 0;
+                              const extH = Math.floor(ext / 60);
+                              const extM = ext % 60;
+                              const extStr = ext > 0 ? `, ${extH}h ${extM.toString().padStart(2, '0')}m ext` : "";
+                              return `Selected: ${initStr} - ${remStr}${extStr}`;
+                            })()}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-slate-400 shrink-0">Duration:</span>
+                          <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-semibold truncate">
+                            No limit selected · {formatRemaining(pc.timeRemaining)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -649,6 +671,8 @@ export default function LivePCsView({ currency, pcs,
                           Release
                         </button>
                       </>
+                    ) : pc.status === PCStatus.OFFLINE ? (
+                      <span className="text-[11px] text-slate-400 font-mono italic px-2 py-1 bg-slate-100 rounded-lg">Powered Off</span>
                     ) : (
                       <>
                         {/* Available controls */}
@@ -660,7 +684,6 @@ export default function LivePCsView({ currency, pcs,
                               onUpdatePCStatus(pc.id, PCStatus.AVAILABLE);
                             }
                           }}
-                          disabled={pc.status === PCStatus.OFFLINE}
                           className={`px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center space-x-1 border ${
                             pc.status === PCStatus.AVAILABLE
                               ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-600 shadow-sm"
@@ -684,21 +707,15 @@ export default function LivePCsView({ currency, pcs,
                         </button>
 
                         <button
-                          disabled={pc.status === PCStatus.OFFLINE}
                           onClick={() => {
-                            if (pc.status === PCStatus.OFFLINE) return;
                             if (onPowerTogglePC) {
                               setPowerTarget({ pc });
                             } else {
                               onUpdatePCStatus(pc.id, PCStatus.OFFLINE);
                             }
                           }}
-                          className={`p-1.5 border rounded-lg ${
-                            pc.status === PCStatus.OFFLINE
-                              ? "bg-slate-800 text-slate-400 border-slate-900 hover:bg-slate-700"
-                              : "bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
-                          }`}
-                          title={pc.status === PCStatus.OFFLINE ? "This PC is off. Switch it on at the machine." : "Turn station OFF (Physically shut down PC)"}
+                          className="p-1.5 border rounded-lg bg-white hover:bg-slate-100 text-slate-500 hover:text-red-600 border-slate-200"
+                          title="Turn station OFF (Physically shut down PC)"
                         >
                           <Power className="w-3.5 h-3.5" />
                         </button>

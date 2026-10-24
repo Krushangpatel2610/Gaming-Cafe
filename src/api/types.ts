@@ -57,6 +57,7 @@ export interface ApiSystemSessionInfo {
   durationMinutes: number | null;
   bookingId: string | null;
   targetCapMinutes?: number | null;
+  initialCapMinutes?: number | null;
   capChoiceMade?: boolean;
   remainingMinutes?: number | null;
   inBreak?: boolean;
@@ -150,6 +151,8 @@ export interface ApiCustomer {
   isSuspended: boolean;
   suspendedAt: string | null;
   suspendedReason: string | null;
+  appealStatus?: string | null;
+  appealText?: string | null;
   creditsBalance: string;
   totalSpend: string;
   totalSessions: number;
@@ -598,3 +601,17 @@ export interface ApiLoginBackgroundSettings {
 }
 
 
+
+export interface ApiSuspensionAppeal {
+  id: string;
+  userId: string;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  reason: string | null;
+  suspendedAt: string | null;
+  appealText: string;
+  appealStatus: "pending" | "approved" | "rejected";
+  appealedAt: string | null;
+  appealResponse?: string | null;
+}

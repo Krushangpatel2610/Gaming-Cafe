@@ -7,7 +7,8 @@ import {
   Sparkles,
   Wifi,
   AlertTriangle,
-  Settings
+  Settings,
+  Menu
 } from "lucide-react";
 import { PC, PCStatus, ActivityLog } from "../types";
 
@@ -17,9 +18,10 @@ interface TopNavBarProps {
   logs: ActivityLog[];
   onSearch: (query: string) => void;
   onClearLogs: () => void;
+  onToggleSidebar?: () => void;
 }
 
-export default function TopNavBar({ pcs, loungeName, logs, onSearch, onClearLogs }: TopNavBarProps) {
+export default function TopNavBar({ pcs, loungeName, logs, onSearch, onClearLogs, onToggleSidebar }: TopNavBarProps) {
   const [timeString, setTimeString] = useState<string>("");
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -51,33 +53,44 @@ export default function TopNavBar({ pcs, loungeName, logs, onSearch, onClearLogs
   };
 
   return (
-    <header id="app-topbar" className="fixed top-0 right-0 left-64 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 z-20 shadow-sm">
+    <header id="app-topbar" className="fixed top-0 right-0 left-0 lg:left-64 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 lg:px-8 z-20 shadow-sm">
       {/* Search and Lounge Branding */}
-      <div className="flex items-center space-x-6 flex-1 max-w-lg">
-        <div className="hidden lg:block">
+      <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6 flex-1 min-w-0 max-w-lg">
+        {/* Mobile Hamburger Button */}
+        <button
+          onClick={onToggleSidebar}
+          className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg lg:hidden transition-colors shrink-0"
+          aria-label="Toggle navigation menu"
+          id="mobile-sidebar-toggle"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Desktop Lounge Branding */}
+        <div className="hidden lg:block shrink-0">
           <span className="text-xs font-semibold text-slate-400 font-mono block uppercase tracking-wider">
             Active Hub
           </span>
-          <span className="text-sm font-bold text-slate-800 tracking-tight font-display">
+          <span className="text-sm font-bold text-slate-800 tracking-tight font-display truncate max-w-[140px] block">
             {loungeName}
           </span>
         </div>
         
         {/* Universal Search Bar */}
-        <div className="relative w-full">
+        <div className="relative w-full min-w-0">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search PCs, members, games..."
+            placeholder="Search PCs, members..."
             value={searchQuery}
             onChange={handleSearchChange}
-            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-sans"
+            className="w-full pl-9 pr-3 sm:pr-4 py-1.5 text-xs rounded-full border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-sans"
           />
         </div>
       </div>
 
       {/* Right widgets */}
-      <div className="flex items-center space-x-6">
+      <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6 shrink-0">
         {/* Occupancy Indicator */}
         <div className="hidden md:flex items-center space-x-4 px-4 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
           <div className="flex items-center space-x-1.5">
@@ -100,9 +113,9 @@ export default function TopNavBar({ pcs, loungeName, logs, onSearch, onClearLogs
         </div>
 
         {/* Real-time Clock */}
-        <div className="flex items-center space-x-2 px-3 py-1.5 bg-indigo-50/50 text-indigo-700 rounded-lg border border-indigo-100/50">
-          <Clock className="w-4 h-4 text-indigo-600 animate-pulse" />
-          <span className="text-xs font-bold font-mono tracking-wider">{timeString || "00:00:00"}</span>
+        <div className="hidden sm:flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-indigo-50/50 text-indigo-700 rounded-lg border border-indigo-100/50">
+          <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 animate-pulse" />
+          <span className="text-[11px] sm:text-xs font-bold font-mono tracking-wider">{timeString || "00:00:00"}</span>
         </div>
 
         {/* Warning Indicator if any low time PCs */}
@@ -132,7 +145,7 @@ export default function TopNavBar({ pcs, loungeName, logs, onSearch, onClearLogs
                 className="fixed inset-0 z-40" 
                 onClick={() => setShowNotifications(false)}
               />
-              <div className="absolute right-0 mt-2.5 w-96 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto sm:mt-2.5 w-[calc(100vw-1rem)] sm:w-96 max-w-sm bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="font-semibold text-slate-800 text-sm">System Audit Logs</span>

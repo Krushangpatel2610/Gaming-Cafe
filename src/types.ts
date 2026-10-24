@@ -28,14 +28,15 @@ export interface PC {
   specs: PCSpecs;
   activeSessionId?: string;
   currentUser?: string;
+  currentUserPhone?: string | null;
   timeRemaining?: number; // in seconds
   totalPlayTimeToday?: number; // in minutes
-  // Real backend link to this PC's System Type — hourly rate lives there
-  // (ApiSystemType.hourlyBaseRate), not on a fixed per-group settings value.
   systemTypeId?: string;
   stationNumber?: number | null;
   platform?: string | null;
   targetCapMinutes?: number | null;
+  initialCapMinutes?: number | null;
+  extensionMinutes?: number | null;
   capChoiceMade?: boolean;
   inBreak?: boolean;
   breakStartedAt?: string | null;
@@ -47,9 +48,13 @@ export interface Session {
   pcName: string;
   customerName: string;
   customerId?: string; // empty if guest
+  customerPhone?: string | null;
   startTime: string;
   endTime?: string;
   durationMinutes: number;
+  initialCapMinutes?: number | null;
+  targetCapMinutes?: number | null;
+  extensionMinutes?: number | null;
   remainingSeconds?: number;
   ratePerHour: number;
   totalCost: number;
@@ -97,13 +102,6 @@ export interface LeaderboardEntry {
   date: string;
 }
 
-// Hourly rates used to live here as 4 fixed fields (standard/vip/console/
-// streaming) — that never matched the real backend, which has an arbitrary
-// number of named System Types, each with its own hourlyBaseRate. Rates are
-// now edited via the real System Types list (see SettingsView + ApiSystemType)
-// instead of here. The fields below have no backend equivalent at all
-// (no store-level tax rate, opening hours, or guest/autolock policy exists
-// server-side) — they stay local-only/cosmetic, same as before.
 export interface SystemSettings {
   loungeName: string;
   currency: string;

@@ -590,7 +590,7 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
             Upload your own UPI QR (PhonePe, GPay, etc). No payment gateway — customers scan and pay you directly, staff record it afterward from the Payments tab.
           </p>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
             <div className="w-28 h-28 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
               {qrPreview || qr?.upiQrImage ? (
                 <img src={qrPreview || qr?.upiQrImage || ""} alt="UPI QR" className="w-full h-full object-contain" />

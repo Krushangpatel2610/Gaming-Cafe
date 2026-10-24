@@ -1,10 +1,10 @@
 import { formatCurrency, currencySymbol } from '../lib/currency';
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Receipt, TrendingUp, FileText, X, ShieldAlert, ReceiptText } from "lucide-react";
+import { Receipt, TrendingUp, FileText, X, ShieldAlert, Calendar } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
-import { listBillingLedger, getBillingDetail, generateBill, applyBillingOverride, getRevenueSummary } from "../api/billing";
+import { listBillingLedger, getBillingDetail, applyBillingOverride, getRevenueSummary } from "../api/billing";
 import { ApiBillingEntry, ApiBillingOverride, ApiBillingRevenueSummary } from "../api/types";
 import { listBeverageOrders, ApiBeverageOrder } from "../api/beverages";
 import { Session } from "../types";
@@ -21,18 +21,20 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
   const [ledger, setLedger] = useState<ApiBillingEntry[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
-  const limit = 20;
+  const limit = 50;
   const [summary, setSummary] = useState<ApiBillingRevenueSummary | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [selected, setSelected] = useState<{ billing: ApiBillingEntry; overrides: ApiBillingOverride[] } | null>(null);
-  const [genSessionId, setGenSessionId] = useState<string>("");
+
+  // Date Filter State
+  const [datePreset, setDatePreset] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
 
   const [overrideType, setOverrideType] = useState<"price" | "duration" | "both">("price");
   const [overrideReason, setOverrideReason] = useState<string>("");
   const [overrideAmount, setOverrideAmount] = useState<string>("");
   const [overrideMinutes, setOverrideMinutes] = useState<string>("");
-
-  const unbilledSessions = useMemo(() => sessions.filter((s) => s.status === "Completed" && s.paymentStatus === "Unpaid"), [sessions]);
 
   const refreshLedger = async () => {
     if (!storeId) return;
@@ -62,7 +64,6 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId, page]);
 
-  // Beverages that were actually bought (paid or handed over). Rejected ones are not sales.
   useEffect(() => {
     if (!storeId) return;
     (async () => {
@@ -81,17 +82,12 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
   const playerName = (b: ApiBillingEntry) =>
     b.userName || (b.userId ? `Player ${b.userId.slice(0, 6)}` : "Walk-in guest");
 
-  const beverageTotal = useMemo(
-    () => beverageOrders.reduce((sum, o) => sum + parseFloat(o.totalAmount || "0"), 0),
-    [beverageOrders],
-  );
-
   useEffect(() => {
     refreshSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
-  const totals = useMemo(() => {
+  const allTimeTotals = useMemo(() => {
     if (!summary) return null;
     return summary.summary.reduce(
       (acc, row) => ({
@@ -104,6 +100,58 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
     );
   }, [summary]);
 
+  const isDateInRange = (dateStr: string) => {
+    if (datePreset === "all") return true;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (datePreset === "today") {
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    }
+    if (datePreset === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d >= oneWeekAgo && d <= now;
+    }
+    if (datePreset === "month") {
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth()
+      );
+    }
+    if (datePreset === "custom") {
+      if (customStartDate && d < new Date(customStartDate)) return false;
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (d > end) return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const filteredLedger = useMemo(() => {
+    return ledger.filter((b) => isDateInRange(b.createdAt));
+  }, [ledger, datePreset, customStartDate, customEndDate]);
+
+  const dynamicTotals = useMemo(() => {
+    if (datePreset === "all" && allTimeTotals) {
+      return allTimeTotals;
+    }
+    return filteredLedger.reduce(
+      (acc, b) => ({
+        gross: acc.gross + parseFloat(b.grossAmount || "0"),
+        discounts: acc.discounts + parseFloat(b.discountAmount || "0"),
+        net: acc.net + parseFloat(b.netAmount || "0"),
+        records: acc.records + 1,
+      }),
+      { gross: 0, discounts: 0, net: 0, records: 0 }
+    );
+  }, [filteredLedger, datePreset, allTimeTotals]);
+
   const openDetail = async (billingId: string) => {
     if (!storeId) return;
     try {
@@ -113,18 +161,6 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
       setOverrideMinutes("");
     } catch (err) {
       onNotify(`Failed to load billing detail: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
-    }
-  };
-
-  const handleGenerateBill = async () => {
-    if (!storeId || !genSessionId) return;
-    try {
-      await generateBill(storeId, genSessionId);
-      onNotify("Bill generated for session.", "success");
-      setGenSessionId("");
-      await refreshLedger();
-    } catch (err) {
-      onNotify(`Failed to generate bill: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     }
   };
 
@@ -153,49 +189,65 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
 
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+      {/* Top Header Card with Custom Date Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-precision">
         <div>
           <h2 className="text-xl font-bold text-slate-900 font-display">Billing Ledger</h2>
-          <p className="text-xs text-slate-400 mt-1">Immutable billing records generated from completed sessions, with admin overrides.</p>
+          <p className="text-xs text-slate-400 mt-1">Immutable billing records generated from gaming sessions, with admin overrides.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select value={genSessionId} onChange={(e) => setGenSessionId(e.target.value)} className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-white focus:outline-none">
-            <option value="">-- Select unbilled session --</option>
-            {unbilledSessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.pcName} · {s.customerName} · {new Date(s.startTime).toLocaleString()}
-                {s.unpaidAmount && s.unpaidAmount > 0 ? ` (Unpaid: ${formatCurrency(s.unpaidAmount.toFixed(2), currency)})` : ""}
-              </option>
-            ))}
-          </select>
-          <button
-            disabled={!genSessionId}
-            onClick={handleGenerateBill}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 flex items-center gap-1.5"
-          >
-            <ReceiptText className="w-4 h-4" />
-            <span>Generate Bill</span>
-          </button>
+
+        {/* Date Selector */}
+        <div className="flex flex-wrap items-center gap-2">
+          {(["all", "today", "week", "month", "custom"] as const).map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setDatePreset(preset)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                datePreset === preset
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200"
+              }`}
+            >
+              {preset === "all" ? "All Time" : preset === "week" ? "This Week" : preset === "month" ? "This Month" : preset}
+            </button>
+          ))}
+          {datePreset === "custom" && (
+            <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-white text-slate-700 font-mono"
+              />
+              <span className="text-slate-400 text-xs">to</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-white text-slate-700 font-mono"
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Revenue summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><TrendingUp className="w-3.5 h-3.5" />Gross Revenue</div>
-          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(totals ? totals.gross.toFixed(2) : "0.00", currency)}</p>
+          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(dynamicTotals ? dynamicTotals.gross.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><Receipt className="w-3.5 h-3.5" />Discounts</div>
-          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(totals ? totals.discounts.toFixed(2) : "0.00", currency)}</p>
+          <p className="text-xl font-bold text-slate-900 font-mono">{formatCurrency(dynamicTotals ? dynamicTotals.discounts.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><FileText className="w-3.5 h-3.5" />Net Revenue</div>
-          <p className="text-xl font-bold text-emerald-700 font-mono">{formatCurrency(totals ? totals.net.toFixed(2) : "0.00", currency)}</p>
+          <p className="text-xl font-bold text-emerald-700 font-mono">{formatCurrency(dynamicTotals ? dynamicTotals.net.toFixed(2) : "0.00", currency)}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-precision">
           <div className="flex items-center gap-2 text-slate-400 text-[10px] font-mono uppercase mb-2"><Receipt className="w-3.5 h-3.5" />Billed Records</div>
-          <p className="text-xl font-bold text-slate-900 font-mono">{totals ? totals.records : 0}</p>
+          <p className="text-xl font-bold text-slate-900 font-mono">{dynamicTotals ? dynamicTotals.records : 0}</p>
         </div>
       </div>
 
@@ -216,10 +268,10 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {ledger.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-8 text-slate-400">{loading ? "Loading…" : "No billing records yet."}</td></tr>
+            {filteredLedger.length === 0 ? (
+              <tr><td colSpan={9} className="text-center py-8 text-slate-400">{loading ? "Loading…" : "No billing records match this date filter."}</td></tr>
             ) : (
-              ledger.map((b) => (
+              filteredLedger.map((b) => (
                 <tr key={b.id} className="hover:bg-slate-50/60 cursor-pointer" onClick={() => openDetail(b.id)}>
                   <td className="px-4 py-3 font-mono text-slate-500">{new Date(b.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3 font-semibold text-slate-700">{playerName(b)}</td>
@@ -236,113 +288,88 @@ export default function BillingView({ currency, sessions, onNotify }: BillingVie
           </tbody>
         </table>
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-[11px] text-slate-400 font-mono">
-          <span>Page {page} of {totalPages} · {total} records</span>
+          <span>Page {page} of {totalPages} · {filteredLedger.length} of {total} records</span>
           <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-2.5 py-1 rounded border border-slate-200 disabled:opacity-40">Prev</button>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-2.5 py-1 rounded border border-slate-200 disabled:opacity-40">Next</button>
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-3 py-1 border border-slate-200 rounded disabled:opacity-40 hover:bg-slate-50">Prev</button>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-3 py-1 border border-slate-200 rounded disabled:opacity-40 hover:bg-slate-50">Next</button>
           </div>
         </div>
       </div>
 
-      {/* Beverage sales */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-precision overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 font-display">Beverage Sales</h3>
-            <p className="text-[11px] text-slate-400">Drinks that were paid for, with the player who bought them.</p>
-          </div>
-          <div className="text-right">
-            <span className="text-slate-400 text-[10px] font-mono uppercase block">Total</span>
-            <span className="font-mono font-bold text-slate-900">{formatCurrency(beverageTotal.toFixed(2), currency)}</span>
-          </div>
-        </div>
-        <table className="w-full text-xs">
-          <thead className="bg-slate-50 border-b border-slate-100 text-slate-400 font-mono uppercase text-[10px]">
-            <tr>
-              <th className="text-left px-4 py-3">Date</th>
-              <th className="text-left px-4 py-3">Player</th>
-              <th className="text-left px-4 py-3">PC</th>
-              <th className="text-left px-4 py-3">Items</th>
-              <th className="text-left px-4 py-3">Paid with</th>
-              <th className="text-left px-4 py-3">Status</th>
-              <th className="text-left px-4 py-3">Amount</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {beverageOrders.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8 text-slate-400">No beverages sold yet.</td></tr>
-            ) : (
-              beverageOrders.map((o) => (
-                <tr key={o.id}>
-                  <td className="px-4 py-3 font-mono text-slate-500">{new Date(o.createdAt).toLocaleString()}</td>
-                  <td className="px-4 py-3 font-semibold text-slate-700">{o.user?.name || o.user?.username || "Unknown player"}</td>
-                  <td className="px-4 py-3 text-slate-600">{o.system?.name || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600">{(o.items ?? []).map((i) => `${i.quantity}× ${i.name}`).join(", ") || "—"}</td>
-                  <td className="px-4 py-3 text-slate-600 capitalize">{o.paymentMethod === "credits" ? "Wallet" : o.paymentMethod}</td>
-                  <td className="px-4 py-3 text-slate-600 capitalize">{o.status.replace(/_/g, " ")}</td>
-                  <td className="px-4 py-3 font-mono font-bold text-slate-900">{formatCurrency(parseFloat(o.totalAmount).toFixed(2), currency)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* MODAL: Billing detail + override */}
+      {/* Override / detail modal */}
       {selected && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-lg w-full border border-slate-200 overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-start justify-between sticky top-0">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-xl shadow-xl max-w-lg w-full border border-slate-200 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900 font-display">Billing Record</h3>
-                <p className="text-xs text-slate-400 mt-1 font-mono">{selected.billing.id}</p>
+                <h3 className="text-base font-bold text-slate-900 font-display">Billing Record Detail</h3>
+                <p className="text-[11px] text-slate-400 font-mono">{selected.billing.id}</p>
               </div>
-              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700"><X className="w-4 h-4" /></button>
+              <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2"><span className="text-slate-400 block">Paid by</span><span className="font-semibold text-slate-800">{playerName(selected.billing)}</span></div>
-                <div><span className="text-slate-400 block">Billed window</span><span className="font-mono text-slate-700">{new Date(selected.billing.billedFrom).toLocaleTimeString()} – {new Date(selected.billing.billedUntil).toLocaleTimeString()}</span></div>
-                <div><span className="text-slate-400 block">Minutes</span><span className="font-semibold text-slate-700">{selected.billing.billedMinutes}m</span></div>
-                <div><span className="text-slate-400 block">Base rate</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.baseRate).toFixed(2), currency)}/hr</span></div>
-                <div><span className="text-slate-400 block">Multiplier</span><span className="font-mono text-slate-700">×{selected.billing.appliedMultiplier}</span></div>
-                <div><span className="text-slate-400 block">Gross</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.grossAmount).toFixed(2), currency)}</span></div>
-                <div><span className="text-slate-400 block">Discount</span><span className="font-mono text-slate-700">{formatCurrency(parseFloat(selected.billing.discountAmount).toFixed(2), currency)}</span></div>
-                <div className="pt-1 border-t border-slate-100"><span className="text-slate-400 block">Net Amount</span><span className="font-mono text-lg font-bold text-slate-900">{formatCurrency(parseFloat(selected.billing.netAmount).toFixed(2), currency)}</span></div>
-                <div className="pt-1 border-t border-slate-100"><span className="text-slate-400 block">Billing Stage / Reason</span><span className="font-mono text-xs font-semibold text-slate-700 capitalize">{selected.billing.billingReason.replace(/_/g, " ")}</span></div>
-              </div>
 
-              {selected.overrides.length > 0 && (
-                <div className="pt-3 border-t border-slate-100 space-y-2">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase font-mono">Overrides</p>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-mono">Player</span><span className="font-semibold text-slate-800">{playerName(selected.billing)}</span></div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-mono">Session</span><span className="font-mono text-slate-800">{selected.billing.sessionId.slice(0, 8)}</span></div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-mono">Gross Amount</span><span className="font-mono font-bold text-slate-800">{formatCurrency(parseFloat(selected.billing.grossAmount).toFixed(2), currency)}</span></div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><span className="text-slate-400 block text-[10px] uppercase font-mono">Discount</span><span className="font-mono text-slate-800">{formatCurrency(parseFloat(selected.billing.discountAmount).toFixed(2), currency)}</span></div>
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 col-span-2"><span className="text-slate-400 block text-[10px] uppercase font-mono">Net Billed</span><span className="font-mono text-lg font-bold text-emerald-700">{formatCurrency(parseFloat(selected.billing.netAmount).toFixed(2), currency)}</span></div>
+            </div>
+
+            {selected.overrides.length > 0 && (
+              <div className="border border-slate-100 rounded-lg p-3 bg-slate-50 space-y-2">
+                <span className="text-[10px] font-mono uppercase text-slate-500 font-bold block">Override History</span>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
                   {selected.overrides.map((o) => (
-                    <div key={o.id} className="bg-amber-50 border border-amber-100 rounded-lg p-2.5 text-[11px]">
-                      <p className="font-bold text-amber-800">{o.overrideType}: {o.originalValue} → {o.overrideValue}</p>
-                      <p className="text-amber-700 mt-0.5">{o.reason}</p>
+                    <div key={o.id} className="text-xs bg-white p-2 rounded border border-slate-200">
+                      <div className="flex justify-between text-slate-500 text-[10px] font-mono">
+                        <span>{new Date(o.createdAt).toLocaleString()}</span>
+                        <span className="uppercase">{o.overrideType}</span>
+                      </div>
+                      <p className="text-slate-700 mt-1 font-medium">{o.reason}</p>
+                      <p className="text-slate-400 text-[10px] font-mono mt-0.5">
+                        Amount: {formatCurrency(parseFloat(o.oldAmount).toFixed(2), currency)} → {formatCurrency(parseFloat(o.newAmount).toFixed(2), currency)} · Minutes: {o.oldMinutes} → {o.newMinutes}
+                      </p>
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {admin?.role === "super_admin" && (
-                <form onSubmit={handleOverrideSubmit} className="pt-3 border-t border-slate-100 space-y-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase font-mono flex items-center gap-1"><ShieldAlert className="w-3 h-3" />New Override (super admin)</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["price", "duration", "both"] as const).map((t) => (
-                      <button key={t} type="button" onClick={() => setOverrideType(t)} className={`py-1.5 text-[11px] font-bold rounded-lg border capitalize ${overrideType === t ? "bg-indigo-600 border-indigo-700 text-white" : "bg-slate-50 border-slate-200 text-slate-600"}`}>{t}</button>
-                    ))}
+            {/* Apply override form */}
+            {(admin?.role === "super_admin" || admin?.role === "admin") && (
+              <form onSubmit={handleOverrideSubmit} className="border-t border-slate-100 pt-3 space-y-3">
+                <span className="text-xs font-bold text-slate-800 font-display flex items-center gap-1.5"><ShieldAlert className="w-4 h-4 text-amber-500" /> Apply Override (Audit Logged)</span>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Type</label>
+                    <select value={overrideType} onChange={(e) => setOverrideType(e.target.value as any)} className="w-full px-2 py-1.5 border border-slate-200 rounded bg-slate-50">
+                      <option value="price">Price only</option>
+                      <option value="duration">Duration only</option>
+                      <option value="both">Both</option>
+                    </select>
                   </div>
-                  {(overrideType === "price" || overrideType === "both") && (
-                    <input type="number" step="0.01" placeholder="New amount (₹)" value={overrideAmount} onChange={(e) => setOverrideAmount(e.target.value)} className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50" />
-                  )}
-                  {(overrideType === "duration" || overrideType === "both") && (
-                    <input type="number" placeholder="New minutes" value={overrideMinutes} onChange={(e) => setOverrideMinutes(e.target.value)} className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50" />
-                  )}
-                  <textarea required minLength={10} placeholder="Reason (min 10 characters)" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50" rows={2} />
-                  <button type="submit" className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-semibold">Apply Override</button>
-                </form>
-              )}
-            </div>
+                  <div>
+                    <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">New Amount</label>
+                    <input type="number" step="0.01" value={overrideAmount} onChange={(e) => setOverrideAmount(e.target.value)} disabled={overrideType === "duration"} placeholder={selected.billing.netAmount} className="w-full px-2 py-1.5 border border-slate-200 rounded bg-slate-50 font-mono disabled:opacity-50" />
+                  </div>
+                </div>
+                {overrideType !== "price" && (
+                  <div>
+                    <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">New Minutes</label>
+                    <input type="number" value={overrideMinutes} onChange={(e) => setOverrideMinutes(e.target.value)} placeholder={String(selected.billing.billedMinutes)} className="w-full px-2 py-1.5 border border-slate-200 rounded bg-slate-50 font-mono" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Reason (required)</label>
+                  <input type="text" required value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="e.g. System crash / manager courtesy discount" className="w-full px-2 py-1.5 border border-slate-200 rounded bg-slate-50" />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <button type="button" onClick={() => setSelected(null)} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50 border border-slate-200 rounded">Cancel</button>
+                  <button type="submit" disabled={!overrideReason.trim()} className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded disabled:opacity-40">Save Override</button>
+                </div>
+              </form>
+            )}
           </motion.div>
         </div>
       )}

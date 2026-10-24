@@ -101,26 +101,26 @@ export default function DashboardView({ currency, storeId, pcs,
       className="space-y-8"
     >
       {/* Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between bg-gradient-to-r from-slate-900 to-slate-800 p-8 rounded-2xl border border-slate-700/30 text-white shadow-xl shadow-slate-900/10">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between bg-gradient-to-r from-slate-900 to-slate-800 p-5 sm:p-8 rounded-2xl border border-slate-700/30 text-white shadow-xl shadow-slate-900/10 gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight font-display mb-1.5">
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight font-display mb-1.5">
             Lounge Administrator Workspace
           </h2>
-          <p className="text-sm text-slate-300">
+          <p className="text-xs sm:text-sm text-slate-300">
             Monitor real-time system performance, manage gaming sessions, and audit logs.
           </p>
         </div>
-        <div className="mt-4 md:mt-0 flex space-x-3 shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2.5 shrink-0">
           <button 
             onClick={onQuickStartSession}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 transition-all flex items-center space-x-1.5"
+            className="flex-1 sm:flex-initial px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 transition-all flex items-center justify-center space-x-1.5"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>Quick Session</span>
           </button>
           <button 
             onClick={onQuickRegisterCustomer}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-xs font-semibold border border-slate-700 transition-all flex items-center space-x-1.5"
+            className="flex-1 sm:flex-initial px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-xs font-semibold border border-slate-700 transition-all flex items-center justify-center space-x-1.5"
           >
             <Users className="w-4 h-4" />
             <span>New Member</span>
@@ -168,21 +168,21 @@ export default function DashboardView({ currency, storeId, pcs,
 
           let cardTitle = "Total Revenue";
           let badgeText = "All-Time";
-          let cardValue = `₹${allTimeTotal.toFixed(2)}`;
-          let cardSub = `Cash ₹${allTimeCash.toFixed(2)} · UPI ₹${allTimeUpi.toFixed(2)}`;
+          let cardValue = formatCurrency(allTimeTotal.toFixed(2), currency);
+          let cardSub = `Cash ${formatCurrency(allTimeCash.toFixed(2), currency)} · UPI ${formatCurrency(allTimeUpi.toFixed(2), currency)}`;
 
           if (revenueViewIndex === 1) {
             cardTitle = "Cash vs UPI";
             badgeText = "Split";
             cardValue = `${cashPct}% Cash · ${upiPct}% UPI`;
-            cardSub = `₹${allTimeCash.toFixed(2)} Cash / ₹${allTimeUpi.toFixed(2)} UPI`;
+            cardSub = `${formatCurrency(allTimeCash.toFixed(2), currency)} Cash / ${formatCurrency(allTimeUpi.toFixed(2), currency)} UPI`;
           } else if (revenueViewIndex === 2) {
             cardTitle = "Today's Revenue";
             badgeText = "Today";
-            cardValue = `₹${todayTotal.toFixed(2)}`;
+            cardValue = formatCurrency(todayTotal.toFixed(2), currency);
             cardSub = todayTotal > 0
-              ? `Cash ₹${todayCash.toFixed(2)} · UPI ₹${todayUpi.toFixed(2)} · Play: ₹${playTimeBilled.toFixed(2)}`
-              : `Nothing received yet today · Play: ₹${playTimeBilled.toFixed(2)}`;
+              ? `Cash ${formatCurrency(todayCash.toFixed(2), currency)} · UPI ${formatCurrency(todayUpi.toFixed(2), currency)} · Play: ${formatCurrency(playTimeBilled.toFixed(2), currency)}`
+              : `Nothing received yet today · Play: ${formatCurrency(playTimeBilled.toFixed(2), currency)}`;
           }
 
           return (

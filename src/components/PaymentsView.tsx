@@ -69,6 +69,49 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const [beverageOrders, setBeverageOrders] = useState<ApiBeverageOrder[]>([]);
   const [processingBevOrderId, setProcessingBevOrderId] = useState<string | null>(null);
 
+  // Date Filter State
+  const [datePreset, setDatePreset] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+
+  const isDateInRange = (dateStr: string) => {
+    if (datePreset === "all") return true;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (datePreset === "today") {
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth() &&
+        d.getDate() === now.getDate()
+      );
+    }
+    if (datePreset === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d >= oneWeekAgo && d <= now;
+    }
+    if (datePreset === "month") {
+      return (
+        d.getFullYear() === now.getFullYear() &&
+        d.getMonth() === now.getMonth()
+      );
+    }
+    if (datePreset === "custom") {
+      if (customStartDate && d < new Date(customStartDate)) return false;
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (d > end) return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const filteredPayments = payments.filter((p) => isDateInRange(p.createdAt));
+  const filteredTopupRequests = topupRequests.filter((r) => isDateInRange(r.createdAt));
+  const filteredGamepassOrders = gamepassOrders.filter((o) => isDateInRange(o.createdAt));
+  const filteredBeverageOrders = beverageOrders.filter((b) => isDateInRange(b.createdAt));
+
   const canRecord = admin?.role === "super_admin" || admin?.role === "admin";
   const canRefund = admin?.role === "super_admin";
   const canReviewTopups = admin?.role === "super_admin" || admin?.role === "admin";
@@ -295,7 +338,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             Customers pay directly via your UPI QR — no gateway, no fees. Staff record each payment manually after collecting it.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
           <button onClick={() => setShowQrModal(true)} className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5">
             <QrCode className="w-4 h-4" />
             <span>Show QR</span>
@@ -309,27 +352,64 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setView("main")}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-            view === "main"
-              ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          Approvals &amp; Payments
-        </button>
-        <button
-          onClick={() => setView("history")}
-          className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
-            view === "history"
-              ? "bg-indigo-600 text-white border-indigo-600"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          Payment History
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setView("main")}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+              view === "main"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Approvals &amp; Payments
+          </button>
+          <button
+            onClick={() => setView("history")}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+              view === "history"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            Payment History
+          </button>
+        </div>
+
+        {view === "main" && (
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "today", "week", "month", "custom"] as const).map((preset) => (
+              <button
+                key={preset}
+                onClick={() => setDatePreset(preset)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
+                  datePreset === preset
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"
+                }`}
+              >
+                {preset === "all" ? "All Time" : preset === "week" ? "This Week" : preset === "month" ? "This Month" : preset}
+              </button>
+            ))}
+            {datePreset === "custom" && (
+              <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-slate-50 text-slate-700 font-mono"
+                />
+                <span className="text-slate-400 text-xs">to</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-md bg-slate-50 text-slate-700 font-mono"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {view === "history" && (
@@ -339,14 +419,14 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
       {view === "main" && (
       <>
       {/* Pending wallet top-up requests — player-submitted, needs staff confirm/reject */}
-      {canReviewTopups && topupRequests.length > 0 && (
+      {canReviewTopups && filteredTopupRequests.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
           <div className="px-4 py-3 border-b border-amber-100 bg-amber-50 flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-600" />
-            <h3 className="text-sm font-bold text-amber-900">Pending Wallet Top-Ups ({topupRequests.length})</h3>
+            <h3 className="text-sm font-bold text-amber-900">Pending Wallet Top-Ups ({filteredTopupRequests.length})</h3>
           </div>
           <div className="divide-y divide-slate-50">
-            {topupRequests.map((req) => {
+            {filteredTopupRequests.map((req) => {
               const cust = customers.find((c) => c.userId === req.userId);
               const isCash = req.paymentMethod === 'cash';
               const isSplit = Boolean(req.splitGroupId);
@@ -398,12 +478,12 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
       )}
 
       {/* Pending Gamepass Orders — player-submitted, needs staff confirm/reject */}
-      {canReviewTopups && gamepassOrders.length > 0 && (
+      {canReviewTopups && filteredGamepassOrders.length > 0 && (
         <div className="bg-white rounded-xl border border-indigo-200 shadow-precision overflow-hidden">
           <div className="px-4 py-3 border-b border-indigo-100 bg-indigo-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              <h3 className="text-sm font-bold text-indigo-900">Pending Gamepass Orders ({gamepassOrders.length})</h3>
+              <h3 className="text-sm font-bold text-indigo-900">Pending Gamepass Orders ({filteredGamepassOrders.length})</h3>
             </div>
             <button
               onClick={refreshGamepassOrders}
@@ -414,7 +494,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             </button>
           </div>
           <div className="divide-y divide-slate-100">
-            {gamepassOrders.map((order) => {
+            {filteredGamepassOrders.map((order) => {
               const cust = customers.find((c) => c.userId === order.userId);
               const price = parseFloat(order.totalAmount).toFixed(2);
               const isSplit = order.paymentMethod === 'split';
@@ -558,12 +638,12 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
       )}
 
       {/* Pending Beverage Orders — player-submitted via kiosk, needs staff confirmation */}
-      {canReviewTopups && beverageOrders.length > 0 && (
+      {canReviewTopups && filteredBeverageOrders.length > 0 && (
         <div className="bg-white rounded-xl border border-amber-200 shadow-precision overflow-hidden">
           <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/70 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Coffee className="w-4 h-4 text-amber-700" />
-              <h3 className="text-sm font-bold text-amber-900">Pending Beverage Orders ({beverageOrders.length})</h3>
+              <h3 className="text-sm font-bold text-amber-900">Pending Beverage Orders ({filteredBeverageOrders.length})</h3>
             </div>
             <button
               onClick={refreshBeverageOrders}
@@ -574,7 +654,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             </button>
           </div>
           <div className="divide-y divide-slate-100">
-            {beverageOrders.map((ord) => {
+            {filteredBeverageOrders.map((ord) => {
               const isCash = ord.paymentMethod === 'cash';
               const isSplit = ord.paymentMethod === 'split';
 
@@ -698,10 +778,10 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {payments.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-8 text-slate-400">No payments recorded yet.</td></tr>
+            {filteredPayments.length === 0 ? (
+              <tr><td colSpan={7} className="text-center py-8 text-slate-400">No payments match this date filter.</td></tr>
             ) : (
-              payments.map((p) => {
+              filteredPayments.map((p) => {
                 const cust = p.userId ? customers.find((c) => c.userId === p.userId) : undefined;
                 return (
                   <tr key={p.id} className="hover:bg-slate-50/60">
@@ -725,7 +805,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
           </tbody>
         </table>
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-[11px] text-slate-400 font-mono">
-          <span>Page {page} of {totalPages} · {total} payments</span>
+          <span>Page {page} of {totalPages} · {filteredPayments.length} of {total} payments</span>
           <div className="flex gap-2">
             <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="px-2.5 py-1 rounded border border-slate-200 disabled:opacity-40">Prev</button>
             <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="px-2.5 py-1 rounded border border-slate-200 disabled:opacity-40">Next</button>

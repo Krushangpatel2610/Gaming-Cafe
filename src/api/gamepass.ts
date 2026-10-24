@@ -189,3 +189,25 @@ export function rejectGamepassOrder(
   });
 }
 
+
+export function extendPurchase(
+  storeId: string,
+  purchaseId: string,
+  body: {
+    newExpiresAt?: string;
+    extendDays?: number;
+    extendHours?: number;
+    addRemainingMinutes?: number;
+  }
+): Promise<ApiGamepassPurchase> {
+  return apiPost<ApiGamepassPurchase>(`/stores/${storeId}/gamepass/purchases/${purchaseId}/extend`, body);
+}
+
+export function listAllPurchases(
+  storeId: string,
+  params?: { status?: ApiGamepassRedemptionStatus; page?: number; limit?: number }
+): Promise<ApiListResult<ApiGamepassPurchase[]>> {
+  const entries = Object.entries({ limit: 100, ...params }).filter(([, v]) => v !== undefined) as [string, string | number][];
+  const qs = entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}` : "";
+  return apiGetPaginated<ApiGamepassPurchase[]>(`/stores/${storeId}/gamepass/purchases${qs}`);
+}

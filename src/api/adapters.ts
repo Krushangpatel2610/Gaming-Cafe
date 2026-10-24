@@ -45,7 +45,7 @@ export function platformToPCGroup(platform: ApiSystem["platform"]): PCGroup {
   }
 }
 
-export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | null): PC {
+export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | null, customers?: any[]): PC {
   const specs = system.specs || {};
   let timeRemaining: number | undefined;
 

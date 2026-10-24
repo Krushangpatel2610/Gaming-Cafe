@@ -88,6 +88,36 @@ export default function PaymentHistoryView({ currency, customers, onNotify }: Pa
   const [search, setSearch] = useState<string>("");
   const [page, setPage] = useState<number>(1);
 
+  const applyPreset = (preset: "today" | "week" | "month" | "all") => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    if (preset === "all") {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    if (preset === "today") {
+      const todayStr = fmt(now);
+      setDateFrom(todayStr);
+      setDateTo(todayStr);
+      return;
+    }
+    if (preset === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      setDateFrom(fmt(oneWeekAgo));
+      setDateTo(fmt(now));
+      return;
+    }
+    if (preset === "month") {
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      setDateFrom(fmt(firstOfMonth));
+      setDateTo(fmt(now));
+      return;
+    }
+  };
+
   const fetchPage = useCallback(
     async (pageNo: number): Promise<{ rows: HistoryRow[]; more: boolean }> => {
       if (!storeId) return { rows: [], more: false };
@@ -359,20 +389,55 @@ export default function PaymentHistoryView({ currency, customers, onNotify }: Pa
             <option value="split">Split (Cash + UPI)</option>
             <option value="other">Other</option>
           </select>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none"
-            aria-label="From date"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none"
-            aria-label="To date"
-          />
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              onClick={() => applyPreset("all")}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${
+                !dateFrom && !dateTo ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("today")}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("week")}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset("month")}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
+            >
+              Month
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none"
+              aria-label="From date"
+            />
+            <span className="text-slate-400 text-xs">to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="px-3 py-2 border border-slate-200 text-xs rounded-lg bg-slate-50 focus:outline-none"
+              aria-label="To date"
+            />
+          </div>
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input

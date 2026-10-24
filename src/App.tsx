@@ -110,6 +110,7 @@ function Dashboard() {
   const [settings, setSettings] = useState<SystemSettings>(initialSettings);
   const [logs, setLogs] = useState<ActivityLog[]>(initialLogs);
   const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
 
@@ -145,13 +146,13 @@ function Dashboard() {
       ]);
 
       const activeSessionBySystem = new Map(activeSessions.map(s => [s.systemId, s]));
-      const nextPCs = systems.map(sys => adaptSystemToPC(sys, activeSessionBySystem.get(sys.id)));
+      const nextPCs = systems.map(sys => adaptSystemToPC(sys, activeSessionBySystem.get(sys.id), customers));
       setPCs(nextPCs);
       setLiveDataError(null);
     } catch (err) {
       setLiveDataError(err instanceof ApiError ? err.message : "Failed to load live data from the server.");
     }
-  }, [storeId]);
+  }, [storeId, customers]);
 
   // Full session history (any status) for the Sessions view's history tab —
   // separate from the 6s live poll above since it doesn't need to be that
@@ -167,7 +168,7 @@ function Dashboard() {
         // userId (no admin "get user" endpoint exists yet) or a walk-in phone number.
         const customer = s.userId ? customers.find(c => c.userId === s.userId) : undefined;
         const customerName = customer?.name || s.walkInPhone || (s.userId ? `Member ${s.userId.slice(0, 6)}` : "Guest");
-        return adaptSessionToUI(s, pc?.name || s.systemId, rate, customerName);
+        return adaptSessionToUI(s, pc?.name || s.systemId, rate, customerName, customer?.phone || s.walkInPhone || null);
       });
       setSessions(nextSessions);
     } catch (err) {
@@ -901,10 +902,12 @@ function Dashboard() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         loungeName={settings.loungeName}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main layout container with sidebar offset */}
-      <div className="pl-64 min-h-screen flex flex-col transition-all duration-200">
+      <div className="pl-0 lg:pl-64 min-h-screen flex flex-col transition-all duration-200">
 
         {/* Top Navbar */}
         <TopNavBar
@@ -913,10 +916,11 @@ function Dashboard() {
           logs={logs}
           onSearch={(query) => setSearchQuery(query)}
           onClearLogs={() => setLogs([])}
+          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
         />
 
         {/* Core application view routing */}
-        <main className="flex-1 mt-16 p-8 overflow-y-auto">
+        <main className="flex-1 mt-16 p-3 sm:p-6 lg:p-8 overflow-y-auto">
           {liveDataError && (
             <div className="mb-6 bg-red-50 border border-red-100 text-red-700 text-xs rounded-lg p-3">
               Live PC/session data couldn't be loaded from the server: {liveDataError}
@@ -1005,11 +1009,14 @@ function Dashboard() {
           )}
 
           {activeTab === "customers" && (
-            <CustomersView currency={settings.currency} 
+            <CustomersView
+              currency={settings.currency} 
               customers={customers}
+              storeId={storeId || undefined}
               onRegisterCustomer={handleRegisterCustomer}
               onAddBalance={handleAddBalance}
               onToggleStatus={handleToggleCustomerStatus}
+              onRefreshCustomers={refreshCustomers}
             />
           )}
 

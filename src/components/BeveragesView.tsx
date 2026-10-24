@@ -288,8 +288,8 @@ export default function BeveragesView({ currency }: BeveragesViewProps) {
         </div>
 
         {/* Tab Switcher & Action */}
-        <div className="flex items-center gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl overflow-x-auto max-w-full">
             <button
               onClick={() => setActiveTab("menu")}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${

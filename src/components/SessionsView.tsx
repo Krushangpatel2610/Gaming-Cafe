@@ -10,7 +10,8 @@ import {
   Plus,
   CheckCircle,
   AlertTriangle,
-  Search
+  Search,
+  Calendar
 } from "lucide-react";
 import { Session, PC, SystemSettings } from "../types";
 import { ApiCustomer, ApiSystemType } from "../api/types";
@@ -34,6 +35,51 @@ export default function SessionsView({ currency, sessions,
 }: SessionsViewProps) {
   const [activeSubTab, setActiveSubTab] = useState<"active" | "history" | "calculator">("active");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [datePreset, setDatePreset] = useState<"all" | "today" | "week" | "month" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+
+  const isDateInRange = (dateStr: string) => {
+    if (datePreset === "all") return true;
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (datePreset === "today") {
+      return d.toDateString() === now.toDateString();
+    }
+    if (datePreset === "week") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      return d >= oneWeekAgo && d <= now;
+    }
+    if (datePreset === "month") {
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      return d >= oneMonthAgo && d <= now;
+    }
+    if (datePreset === "custom") {
+      if (customStartDate && d < new Date(customStartDate)) return false;
+      if (customEndDate) {
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59, 999);
+        if (d > end) return false;
+      }
+      return true;
+    }
+    return true;
+  };
+
+  const renderDurationCap = (sess: Session) => {
+    const init = sess.initialCapMinutes ?? (sess.targetCapMinutes ? sess.targetCapMinutes - (sess.extensionMinutes || 0) : null);
+    if (init != null && init > 0) {
+      const initH = Math.floor(init / 60);
+      const initM = init % 60;
+      const initStr = `${initH > 0 ? `${initH}h ` : ""}${initM > 0 || initH === 0 ? `${initM}m` : ""}`.trim();
+      const ext = sess.extensionMinutes || 0;
+      const extH = Math.floor(ext / 60);
+      const extM = ext % 60;
+      const extStr = ext > 0 ? ` + ${extH > 0 ? `${extH}h ` : ""}${extM > 0 || extH === 0 ? `${extM}m` : ""}`.trim() + " ext" : "";
+      return `${initStr}${extStr}`;
+    }
+    return "No limit selected";
+  };
 
   // Calculator state — real system type instead of the old fake PCGroup zone
   const [calcTypeId, setCalcTypeId] = useState<string>(systemTypes[0]?.id || "");
@@ -44,15 +90,17 @@ export default function SessionsView({ currency, sessions,
   const activeSessions = sessions.filter(s => s.status === "Active");
   const completedSessions = sessions.filter(s => s.status === "Completed" || s.status === "Cancelled");
 
-  const filteredActive = activeSessions.filter(s =>
-    s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.pcName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredActive = activeSessions.filter(s => {
+    const matchesSearch = s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.pcName.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch && isDateInRange(s.startTime);
+  });
 
-  const filteredHistory = completedSessions.filter(s =>
-    s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.pcName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredHistory = completedSessions.filter(s => {
+    const matchesSearch = s.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.pcName.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch && isDateInRange(s.startTime);
+  });
 
   const activeCalcType = systemTypes.find(t => t.id === calcTypeId) || systemTypes[0];
   const hourlyRate = activeCalcType ? parseFloat(activeCalcType.hourlyBaseRate) : 0;
@@ -78,7 +126,7 @@ export default function SessionsView({ currency, sessions,
         </div>
 
         {/* Sub-tab toggles */}
-        <div className="flex p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs self-start sm:self-auto">
+        <div className="flex p-1 bg-slate-100 rounded-lg border border-slate-200 text-xs self-start sm:self-auto overflow-x-auto max-w-full">
           <button
             onClick={() => setActiveSubTab("active")}
             className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md font-medium transition-all ${
@@ -251,7 +299,10 @@ export default function SessionsView({ currency, sessions,
                           <div className="font-semibold text-slate-800">{sess.customerName}</div>
                           <div className="text-[10px] text-slate-400 font-mono">Started: {formatDate(sess.startTime)}</div>
                         </td>
-                        <td className="p-4 text-slate-600 font-mono">{sess.durationMinutes} minutes</td>
+                        <td className="p-4 text-slate-700 font-mono">
+                          <span className="font-semibold block">{renderDurationCap(sess)}</span>
+                          <span className="text-[10px] text-slate-400 block">{sess.durationMinutes}m actual</span>
+                        </td>
                         <td className="p-4 font-mono text-slate-500">{formatCurrency(sess.ratePerHour.toFixed(2), currency)}/hr</td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">
                           {formatCurrency(sess.totalCost.toFixed(2), currency)}
