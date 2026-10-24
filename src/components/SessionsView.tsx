@@ -69,15 +69,19 @@ export default function SessionsView({ currency, sessions,
 
   const renderDurationCap = (sess: Session) => {
     const pc = pcs.find(p => p.id === sess.pcId);
-    const init = sess.initialCapMinutes ?? pc?.initialCapMinutes ?? (sess.targetCapMinutes ? sess.targetCapMinutes - (sess.extensionMinutes || pc?.extensionMinutes || 0) : null);
+    const targetCap = sess.targetCapMinutes ?? pc?.targetCapMinutes ?? null;
+    const ext = sess.extensionMinutes ?? pc?.extensionMinutes ?? (targetCap && sess.initialCapMinutes && targetCap > sess.initialCapMinutes ? targetCap - sess.initialCapMinutes : 0);
+    const init = sess.initialCapMinutes ?? pc?.initialCapMinutes ?? (targetCap ? targetCap - ext : null);
+    
     if (init != null && init > 0) {
       const initH = Math.floor(init / 60);
       const initM = init % 60;
       const initStr = `${initH > 0 ? `${initH}h ` : ""}${initM > 0 || initH === 0 ? `${initM}m` : ""}`.trim();
-      const ext = sess.extensionMinutes ?? pc?.extensionMinutes ?? 0;
+      
       const extH = Math.floor(ext / 60);
       const extM = ext % 60;
       const extStr = ext > 0 ? ` + ${extH > 0 ? `${extH}h ` : ""}${extM > 0 || extH === 0 ? `${extM}m` : ""}`.trim() + " extended" : "";
+      
       return `${initStr}${extStr}`;
     }
     return "No limit selected";
