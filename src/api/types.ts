@@ -97,6 +97,10 @@ export interface ApiSession {
   endedAt: string | null;
   durationMinutes: number | null;
   isBilled: boolean;
+  billedAmount?: string | null;
+  isGraceExit?: boolean | null;
+  withinGracePeriod?: boolean | null;
+  graceMinutes?: number | null;
   unpaidAmount?: string | null;
   walkInPhone: string | null;
   notes: string | null;

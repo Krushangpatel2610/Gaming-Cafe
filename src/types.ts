@@ -59,7 +59,10 @@ export interface Session {
   ratePerHour: number;
   totalCost: number;
   status: "Active" | "Completed" | "Cancelled";
-  paymentStatus: "Paid" | "Unpaid";
+  paymentStatus: "Paid" | "Unpaid" | "Courtesy";
+  isGraceExit?: boolean;
+  withinGracePeriod?: boolean;
+  graceMinutes?: number;
   unpaidAmount?: number;
 }
 

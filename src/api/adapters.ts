@@ -150,16 +150,55 @@ export function adaptSessionToUI(
   const durationMinutes = session.durationMinutes ?? 60;
   const startedAtMs = new Date(session.startedAt).getTime();
   const elapsedSeconds = Math.max(0, Math.round((Date.now() - startedAtMs) / 1000));
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const remainingSeconds =
     session.status === "in_progress" ? Math.max(0, durationMinutes * 60 - elapsedSeconds) : undefined;
-  const totalCost = (durationMinutes / 60) * ratePerHour;
+
+  const graceMinutes = session.graceMinutes ?? 5;
+  const withinGracePeriod =
+    session.withinGracePeriod ??
+    (session.status === "in_progress" && elapsedMinutes < graceMinutes);
+
+  const isGraceExit =
+    Boolean(session.isGraceExit) ||
+    (session.status !== "in_progress" &&
+      session.isBilled &&
+      (session.billedAmount === "0.00" || session.billedAmount === null || session.billedAmount === undefined) &&
+      (session.durationMinutes ?? 0) <= graceMinutes &&
+      (!session.unpaidAmount || parseFloat(session.unpaidAmount) === 0));
+
+  let totalCost = 0;
+  if (session.status === "in_progress") {
+    if (withinGracePeriod) {
+      totalCost = 0;
+    } else {
+      totalCost = (durationMinutes / 60) * ratePerHour;
+    }
+  } else {
+    // Completed or Cancelled session: Source of truth is session.billedAmount from backend
+    if (session.billedAmount != null && session.billedAmount !== "") {
+      totalCost = parseFloat(session.billedAmount);
+    } else if (isGraceExit) {
+      totalCost = 0;
+    } else if (session.isBilled && (!session.unpaidAmount || parseFloat(session.unpaidAmount) === 0)) {
+      totalCost = 0;
+    } else {
+      totalCost = (durationMinutes / 60) * ratePerHour;
+    }
+  }
 
   const status: Session["status"] =
     session.status === "in_progress" ? "Active" : session.status === "cancelled" ? "Cancelled" : "Completed";
 
   const unpaid = session.unpaidAmount ? parseFloat(session.unpaidAmount) : 0;
   const paymentStatus: Session["paymentStatus"] =
-    unpaid > 0 ? "Unpaid" : session.isBilled ? "Paid" : "Unpaid";
+    unpaid > 0
+      ? "Unpaid"
+      : isGraceExit || (session.status !== "in_progress" && totalCost === 0 && session.isBilled)
+      ? "Courtesy"
+      : session.isBilled
+      ? "Paid"
+      : "Unpaid";
 
   const initialCapMinutes = session.initialCapMinutes ?? pc?.initialCapMinutes ?? null;
   const targetCapMinutes = session.targetCapMinutes ?? pc?.targetCapMinutes ?? null;
@@ -188,5 +227,8 @@ export function adaptSessionToUI(
     initialCapMinutes,
     targetCapMinutes,
     extensionMinutes,
+    isGraceExit,
+    withinGracePeriod,
+    graceMinutes,
   };
 }
