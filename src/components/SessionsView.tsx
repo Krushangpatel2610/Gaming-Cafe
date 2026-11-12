@@ -332,6 +332,7 @@ export default function SessionsView({ currency, sessions,
                   <th className="p-4">Terminal</th>
                   <th className="p-4">Gamer Profile</th>
                   <th className="p-4">Duration</th>
+                  <th className="p-4">Time Left</th>
                   <th className="p-4">Hourly Rate</th>
                   <th className="p-4 text-right">Total Invoice</th>
                   <th className="p-4 text-center">Billing</th>
@@ -340,7 +341,7 @@ export default function SessionsView({ currency, sessions,
               <tbody className="divide-y divide-slate-100">
                 {filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       No historical sessions recorded.
                     </td>
                   </tr>
@@ -371,6 +372,49 @@ export default function SessionsView({ currency, sessions,
                               Within grace period (Free)
                             </span>
                           )}
+                        </td>
+                        <td className="p-4 text-xs font-mono">
+                          {(() => {
+                            const cust = customers.find(c => c.userId === sess.userId || (c.email && c.email === sess.customerEmail));
+                            if (!cust) return <span className="text-slate-400 font-sans text-[11px]">Guest User</span>;
+                            const passMins = cust.gamepassRemainingMinutes || 0;
+                            const bal = parseFloat(cust.creditsBalance || "0");
+                            const rate = sess.ratePerHour || (systemTypes[0] ? parseFloat(systemTypes[0].hourlyBaseRate) : 80);
+                            const walletMins = rate > 0 ? Math.floor((bal / rate) * 60) : 0;
+
+                            const fmtM = (m: number) => {
+                              const h = Math.floor(m / 60);
+                              const rem = m % 60;
+                              return h > 0 ? `${h}h ${rem}m` : `${rem}m`;
+                            };
+
+                            const hasPass = passMins > 0;
+                            const hasBal = bal > 0;
+
+                            if (!hasPass && !hasBal) {
+                              return <span className="text-slate-400 text-[11px]">0m (No credits/pass)</span>;
+                            }
+
+                            return (
+                              <div className="space-y-0.5">
+                                {hasPass && (
+                                  <div className="text-indigo-600 font-semibold flex items-center gap-1">
+                                    <span className="text-slate-400 font-normal">Gamepass:</span>
+                                    <span>{fmtM(passMins)}</span>
+                                  </div>
+                                )}
+                                {hasBal ? (
+                                  <div className="text-slate-800">
+                                    <span className="text-slate-400">Wallet: </span>
+                                    <span className="font-bold">₹{bal.toFixed(0)}</span>
+                                    <span className="text-slate-500 text-[10px]"> (~{fmtM(walletMins)})</span>
+                                  </div>
+                                ) : (
+                                  <div className="text-slate-400 text-[10px]">Wallet: ₹0</div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 font-mono text-slate-500">{formatCurrency(sess.ratePerHour.toFixed(2), currency)}/hr</td>
                         <td className="p-4 text-right font-bold text-slate-900 font-mono">

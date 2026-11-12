@@ -91,3 +91,52 @@ export function getSuspensionStatus(storeId: string): Promise<{
 export function submitSuspensionAppeal(storeId: string, appealText: string): Promise<{ success: boolean; message: string }> {
   return apiPost(`/stores/${storeId}/customers/appeal`, { appealText });
 }
+
+export interface ApiCustomerDetails {
+  customer: ApiCustomer & {
+    activeGamepassMinutes: number;
+  };
+  sessions: Array<{
+    id: string;
+    systemId: string;
+    systemName: string;
+    startedAt: string;
+    endedAt: string | null;
+    durationMinutes: number | null;
+    status: string;
+    billedAmount: string;
+    unpaidAmount: string;
+  }>;
+  payments: Array<{
+    id: string;
+    amount: string;
+    paymentMethod: string;
+    status: string;
+    utrReference: string | null;
+    createdAt: string;
+    reviewedAt: string | null;
+  }>;
+  gamepasses: Array<{
+    id: string;
+    packageName: string;
+    totalAmount: string;
+    orderStatus: string;
+    paymentMethod: string;
+    remainingMinutes: number | null;
+    redemptionStatus: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+  }>;
+  creditTransactions: Array<{
+    id: string;
+    transactionType: string;
+    amount: string;
+    balanceAfter: string;
+    description: string | null;
+    createdAt: string;
+  }>;
+}
+
+export function getCustomerDetails(storeId: string, userId: string): Promise<ApiCustomerDetails> {
+  return apiGet<ApiCustomerDetails>(`/stores/${storeId}/customers/${userId}`);
+}

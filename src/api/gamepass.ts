@@ -145,7 +145,7 @@ export interface ApiGamepassOrder {
   totalAmount: string;
   cashAmount?: string;
   upiAmount?: string;
-  status: "pending" | "confirmed" | "rejected";
+  status: "pending" | "confirmed" | "rejected" | "allowed";
   paymentMethod: string;
   rejectionReason: string | null;
   reviewedBy: string | null;
@@ -166,6 +166,15 @@ export function listGamepassOrders(
   const entries = Object.entries({ status: "pending", limit: 50, ...params }).filter(([, v]) => v !== undefined) as [string, string | number][];
   const qs = entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}` : "";
   return apiGetPaginated<ApiGamepassOrder[]>(`/stores/${storeId}/gamepass/orders${qs}`);
+}
+
+export function allowGamepassOrder(
+  storeId: string,
+  orderId: string
+): Promise<ApiGamepassOrder> {
+  return apiPost<ApiGamepassOrder>(
+    `/stores/${storeId}/gamepass/orders/${orderId}/allow`
+  );
 }
 
 export function confirmGamepassOrder(

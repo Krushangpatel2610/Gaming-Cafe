@@ -50,14 +50,14 @@ export function adjustCredits(storeId: string, body: AdjustCreditsBody): Promise
 
 // ── Wallet top-up requests (player-initiated, staff-confirmed) ──────────
 
-export type TopupRequestStatus = "pending" | "confirmed" | "rejected";
+export type TopupRequestStatus = "pending" | "confirmed" | "rejected" | "allowed";
 
 export interface ApiTopupRequest {
   id: string;
   storeId: string;
   userId: string;
   amount: string;
-  paymentMethod?: "upi" | "cash" | "split";
+  paymentMethod?: "upi" | "cash" | "split" | "pay_later";
   splitGroupId?: string | null;
   utrReference: string | null;
   status: TopupRequestStatus;
@@ -102,6 +102,10 @@ export function listTopupRequests(
   const entries = Object.entries(params ?? {}).filter(([, v]) => v !== undefined) as [string, string | number][];
   const qs = entries.length ? `?${new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()}` : "";
   return apiGetPaginated<ApiTopupRequest[]>(`/stores/${storeId}/credits/topup-requests${qs}`);
+}
+
+export function allowTopupRequest(storeId: string, requestId: string): Promise<ApiTopupRequest> {
+  return apiPost<ApiTopupRequest>(`/stores/${storeId}/credits/topup-requests/${requestId}/allow`);
 }
 
 export function confirmTopupRequest(storeId: string, requestId: string): Promise<ApiTopupRequest> {

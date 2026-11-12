@@ -6,6 +6,7 @@ import {
   listGamepassOrders,
   confirmGamepassOrder,
   rejectGamepassOrder,
+  allowGamepassOrder,
   ApiGamepassOrder,
 } from "../api/gamepass";
 import {
@@ -18,7 +19,7 @@ import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { listPayments, recordPayment, refundPayment, RecordPaymentBody } from "../api/payments";
 import { getPaymentQr } from "../api/stores";
-import { listTopupRequests, confirmTopupRequest, rejectTopupRequest, ApiTopupRequest } from "../api/credits";
+import { listTopupRequests, confirmTopupRequest, rejectTopupRequest, allowTopupRequest, ApiTopupRequest } from "../api/credits";
 import { ApiCustomer, ApiPayment, ApiPaymentMethod, ApiPaymentQr } from "../api/types";
 import PaymentHistoryView from "./PaymentHistoryView";
 
@@ -119,8 +120,9 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const refreshTopupRequests = async () => {
     if (!storeId) return;
     try {
-      const { data } = await listTopupRequests(storeId, { status: "pending", limit: 50 });
-      setTopupRequests(data);
+      const { data } = await listTopupRequests(storeId, { limit: 100 });
+      const pendingAndAllowed = data.filter(r => r.status === "pending" || r.status === "allowed");
+      setTopupRequests(pendingAndAllowed);
     } catch (err) {
       onNotify(`Failed to load top-up requests: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
     }
@@ -129,8 +131,9 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
   const refreshGamepassOrders = async () => {
     if (!storeId) return;
     try {
-      const { data } = await listGamepassOrders(storeId, { status: "pending" });
-      setGamepassOrders(data);
+      const { data } = await listGamepassOrders(storeId, { limit: 100 });
+      const pendingAndAllowed = data.filter(o => o.status === "pending" || o.status === "allowed");
+      setGamepassOrders(pendingAndAllowed);
     } catch (err) {
       // Non-fatal background fetch
     }
@@ -254,6 +257,34 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
+
+    const handleAllowTopup = async (req: ApiTopupRequest) => {
+    if (!storeId) return;
+    setProcessingId(req.id);
+    try {
+      await allowTopupRequest(storeId, req.id);
+      onNotify(`Allowed Pay Later top-up of ₹${parseFloat(req.amount).toFixed(2)}. Credits granted to gamer!`, "success");
+      await refreshTopupRequests();
+    } catch (err) {
+      onNotify(`Failed to allow Pay Later: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleAllowGamepass = async (order: ApiGamepassOrder) => {
+    if (!storeId) return;
+    setProcessingOrderId(order.id);
+    try {
+      await allowGamepassOrder(storeId, order.id);
+      onNotify(`Allowed Pay Later gamepass order of ₹${parseFloat(order.totalAmount).toFixed(2)}. Passes activated!`, "success");
+      await refreshGamepassOrders();
+    } catch (err) {
+      onNotify(`Failed to allow Pay Later order: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");
+    } finally {
+      setProcessingOrderId(null);
+    }
+  };
 
   const handleConfirmTopup = async (req: ApiTopupRequest) => {
     if (!storeId) return;
@@ -428,6 +459,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
           <div className="divide-y divide-slate-50">
             {filteredTopupRequests.map((req) => {
               const cust = customers.find((c) => c.userId === req.userId);
+              const isPayLater = req.paymentMethod === 'pay_later';
+              const isAllowed = req.status === 'allowed';
               const isCash = req.paymentMethod === 'cash';
               const isSplit = Boolean(req.splitGroupId);
               return (
@@ -435,9 +468,19 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-mono font-bold text-slate-900 text-sm">{formatCurrency(parseFloat(req.amount).toFixed(2), currency)}</p>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
-                        {isCash ? 'CASH' : 'UPI'}
-                      </span>
+                      {isPayLater ? (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          isAllowed
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          {isAllowed ? 'PAY LATER (ALLOWED · UNPAID)' : 'PAY LATER (PENDING)'}
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                          {isCash ? 'CASH' : 'UPI'}
+                        </span>
+                      )}
                       {isSplit && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-purple-50 text-purple-700 border border-purple-200 flex items-center gap-1">
                           <Layers className="w-3 h-3 text-purple-600" />
@@ -453,14 +496,46 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleConfirmTopup(req)}
-                      disabled={processingId === req.id}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      Confirm {isCash ? 'Cash' : 'UPI'}
-                    </button>
+                    {isAllowed ? (
+                      <button
+                        onClick={() => handleConfirmTopup(req)}
+                        disabled={processingId === req.id}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                        title="Customer paid - confirm collection"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Confirm Payment
+                      </button>
+                    ) : isPayLater ? (
+                      <button
+                        onClick={() => handleAllowTopup(req)}
+                        disabled={processingId === req.id}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                        title="Allow gamer to play now with Pay Later"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Allow Pay Later
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleConfirmTopup(req)}
+                          disabled={processingId === req.id}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Confirm {isCash ? 'Cash' : 'UPI'}
+                        </button>
+                        <button
+                          onClick={() => handleAllowTopup(req)}
+                          disabled={processingId === req.id}
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          title="Allow as Pay Later"
+                        >
+                          Pay Later
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => setRejectTarget(req)}
                       disabled={processingId === req.id}
@@ -497,6 +572,8 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
             {filteredGamepassOrders.map((order) => {
               const cust = customers.find((c) => c.userId === order.userId);
               const price = parseFloat(order.totalAmount).toFixed(2);
+              const isPayLater = order.paymentMethod === 'pay_later';
+              const isAllowed = order.status === 'allowed';
               const isSplit = order.paymentMethod === 'split';
               const isCash = order.paymentMethod === 'cash';
               return (
@@ -509,9 +586,19 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                       <span className="text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
                         {order.itemCount} pass{order.itemCount > 1 ? 'es' : ''}
                       </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isSplit ? 'bg-purple-100 text-purple-800 border border-purple-200' : isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
-                        {isSplit ? 'SPLIT (CASH + UPI)' : isCash ? 'CASH' : 'UPI'}
-                      </span>
+                      {isPayLater ? (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${
+                          isAllowed
+                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}>
+                          {isAllowed ? 'PAY LATER (ALLOWED · UNPAID)' : 'PAY LATER (PENDING)'}
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isSplit ? 'bg-purple-100 text-purple-800 border border-purple-200' : isCash ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                          {isSplit ? 'SPLIT (CASH + UPI)' : isCash ? 'CASH' : 'UPI'}
+                        </span>
+                      )}
                       <span className="text-xs text-slate-600 font-medium">
                         {cust?.name || cust?.phone || `Player ${order.userId.slice(0, 8)}`}
                       </span>
@@ -604,20 +691,58 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                           </button>
                         )}
                       </>
-                    ) : (
-                      <button
-                        onClick={() => handleConfirmOrder(order)}
-                        disabled={processingOrderId === order.id}
-                        className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                      >
-                        {processingOrderId === order.id ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Check className="w-3.5 h-3.5" />
-                        )}
-                        <span>Approve Order</span>
-                      </button>
-                    )}
+                    ) : isAllowed ? (
+                        <button
+                          onClick={() => handleConfirmOrder(order)}
+                          disabled={processingOrderId === order.id}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          title="Customer paid - confirm collection"
+                        >
+                          {processingOrderId === order.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          <span>Confirm Payment</span>
+                        </button>
+                      ) : isPayLater ? (
+                        <button
+                          onClick={() => handleAllowGamepass(order)}
+                          disabled={processingOrderId === order.id}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          title="Allow gamer to play now with Pay Later"
+                        >
+                          {processingOrderId === order.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          <span>Allow Pay Later</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleConfirmOrder(order)}
+                            disabled={processingOrderId === order.id}
+                            className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                          >
+                            {processingOrderId === order.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                            <span>Approve Order</span>
+                          </button>
+                          <button
+                            onClick={() => handleAllowGamepass(order)}
+                            disabled={processingOrderId === order.id}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 disabled:opacity-50 rounded-lg text-xs font-semibold flex items-center gap-1"
+                            title="Allow as Pay Later"
+                          >
+                            Pay Later
+                          </button>
+                        </>
+                      )}
                     <button
                       onClick={() => {
                         setRejectOrderTarget(order);

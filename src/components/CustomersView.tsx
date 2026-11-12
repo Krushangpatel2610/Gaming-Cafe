@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { ApiCustomer, ApiSuspensionAppeal } from "../api/types";
 import { listSuspensionAppeals, resolveSuspensionAppeal } from "../api/customers";
+import CustomerDetailDrawer from "./CustomerDetailDrawer";
 
 interface CustomersViewProps {
   currency: string;
@@ -56,6 +57,7 @@ export default function CustomersView({
   // Modal states
   const [showRegisterModal, setShowRegisterModal] = useState<boolean>(false);
   const [topUpCustId, setTopUpCustId] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<number>(20);
 
   // Form states for register
@@ -271,7 +273,8 @@ export default function CustomersView({
               filteredCustomers.map((cust) => (
                 <div
                   key={cust.userId}
-                  className={`bg-white rounded-xl border p-5 space-y-4 shadow-precision transition-all duration-150 flex flex-col justify-between ${
+                  onClick={() => setSelectedCustomerId(cust.userId)}
+                  className={`bg-white rounded-xl border p-5 space-y-4 shadow-precision transition-all duration-150 flex flex-col justify-between cursor-pointer hover:border-indigo-400 hover:shadow-md group ${
                     cust.isSuspended ? "border-red-200 bg-red-50/10 ring-1 ring-red-200/50" : "border-slate-200"
                   }`}
                 >
@@ -361,7 +364,7 @@ export default function CustomersView({
                   <div className="pt-2 flex items-center justify-between gap-3">
                     <button
                       disabled={cust.isSuspended}
-                      onClick={() => setTopUpCustId(cust.userId)}
+                      onClick={(e) => { e.stopPropagation(); setTopUpCustId(cust.userId); }}
                       className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150 border border-indigo-200/50 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1"
                     >
                       <DollarSign className="w-3.5 h-3.5" />
@@ -369,7 +372,7 @@ export default function CustomersView({
                     </button>
 
                     <button
-                      onClick={() => handleToggleClick(cust)}
+                      onClick={(e) => { e.stopPropagation(); handleToggleClick(cust); }}
                       className={`p-1.5 border rounded-lg transition-colors duration-150 ${
                         !cust.isSuspended
                           ? "bg-white hover:bg-red-50 text-slate-400 hover:text-red-600 border-slate-200"
@@ -602,6 +605,18 @@ export default function CustomersView({
           </motion.div>
         </div>
       )}
+      {/* Customer Full Detail Slide-over Drawer */}
+      <CustomerDetailDrawer
+        storeId={storeId}
+        customerId={selectedCustomerId}
+        currency={currency}
+        onClose={() => setSelectedCustomerId(null)}
+        onTopUp={(userId) => setTopUpCustId(userId)}
+        onToggleStatus={(userId) => {
+          const c = customers.find(item => item.userId === userId);
+          if (c) handleToggleClick(c);
+        }}
+      />
     </motion.div>
   );
 }

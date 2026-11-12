@@ -162,6 +162,8 @@ export interface ApiCustomer {
   appealStatus?: string | null;
   appealText?: string | null;
   creditsBalance: string;
+  gamepassRemainingMinutes?: number;
+  hasUnconfirmedPayment?: boolean;
   totalSpend: string;
   totalSessions: number;
   totalPlayMinutes: number;
@@ -411,6 +413,18 @@ export interface ApiStoreAdmin {
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
+}
+
+export interface ApiStaff {
+  id: string;
+  storeId: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────
