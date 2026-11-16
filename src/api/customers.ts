@@ -1,4 +1,4 @@
-import { apiGet, apiGetPaginated, apiPost } from "./client";
+import { apiGet, apiGetPaginated, apiPost, apiPatch } from "./client";
 import { ApiCustomer, ApiSuspensionAppeal } from "./types";
 
 export interface ListCustomersParams {
@@ -135,8 +135,83 @@ export interface ApiCustomerDetails {
     description: string | null;
     createdAt: string;
   }>;
+  payLater?: {
+    totalPayLaterDebt: number;
+    oldestUnpaidPayLaterDate: string | null;
+    payLaterDueDate: string | null;
+    isPayLaterOverdue: boolean;
+    daysRemainingUntilDue: number | null;
+    isPayLaterBlocked: boolean;
+    requestsToday: number;
+    maxRequestsPerDay: number;
+    canUsePayLater: boolean;
+  };
 }
 
 export function getCustomerDetails(storeId: string, userId: string): Promise<ApiCustomerDetails> {
   return apiGet<ApiCustomerDetails>(`/stores/${storeId}/customers/${userId}`);
+}
+
+export function resetCustomerPassword(
+  storeId: string,
+  userId: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string }> {
+  return apiPost(`/stores/${storeId}/customers/${userId}/reset-password`, { newPassword });
+}
+
+export interface ApiPayLaterData {
+  pendingAllowed: Array<{
+    id: string;
+    type: "topup" | "gamepass";
+    amount: string;
+    customerName: string;
+    userId: string;
+    createdAt: string;
+    utrReference?: string | null;
+  }>;
+  customerSummary: Array<{
+    userId: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    totalDebt: number;
+    unpaidCount: number;
+    oldestUnpaidDate: string;
+    dueDate: string;
+    isOverdue: boolean;
+    daysRemaining: number;
+  }>;
+  history: Array<{
+    id: string;
+    type: "topup" | "gamepass";
+    amount: string;
+    customerName: string;
+    userId: string;
+    status: string;
+    createdAt: string;
+    confirmedAt: string | null;
+  }>;
+  settings: {
+    maxRequestsPerDay: number;
+    maxAmountPerRequest: number;
+    maxOutstandingBalance: number;
+    repaymentWindowDays: number;
+  };
+}
+
+export function getPayLaterData(storeId: string): Promise<ApiPayLaterData> {
+  return apiGet<ApiPayLaterData>(`/stores/${storeId}/pay-later`);
+}
+
+export function updatePaymentSettings(
+  storeId: string,
+  settings: {
+    pay_later_max_requests_per_day?: number;
+    pay_later_max_amount_per_request?: number;
+    pay_later_max_outstanding_balance?: number;
+    pay_later_repayment_window_days?: number;
+  }
+): Promise<{ success: boolean; payments: any }> {
+  return apiPatch(`/stores/${storeId}/payment-settings`, settings);
 }

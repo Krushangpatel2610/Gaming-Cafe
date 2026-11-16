@@ -18,9 +18,10 @@ import {
   History,
   Loader2,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  KeyRound,
 } from "lucide-react";
-import { getCustomerDetails, ApiCustomerDetails } from "../api/customers";
+import { getCustomerDetails, resetCustomerPassword, ApiCustomerDetails } from "../api/customers";
 import { formatCurrency } from "../lib/currency";
 
 interface CustomerDetailDrawerProps {
@@ -44,6 +45,11 @@ export default function CustomerDetailDrawer({
   const [data, setData] = useState<ApiCustomerDetails | null>(null);
   const [activeTab, setActiveTab] = useState<"sessions" | "payments" | "gamepass" | "ledger">("sessions");
   const [error, setError] = useState<string | null>(null);
+  const [showResetModal, setShowResetModal] = useState<boolean>(false);
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [resetLoading, setResetLoading] = useState<boolean>(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState<string | null>(null);
 
   const fetchDetails = async () => {
     if (!storeId || !customerId) return;
@@ -200,19 +206,86 @@ export default function CustomerDetailDrawer({
               </div>
             </div>
 
+            {/* Pay Later Debt Card if information is present */}
+            {data?.payLater && (
+              <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                data.payLater.totalPayLaterDebt > 0
+                  ? data.payLater.isPayLaterOverdue
+                    ? "bg-red-50/80 border-red-200 text-red-950"
+                    : "bg-amber-50/80 border-amber-200 text-amber-950"
+                  : "bg-emerald-50/50 border-emerald-100 text-emerald-950"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    data.payLater.totalPayLaterDebt > 0
+                      ? data.payLater.isPayLaterOverdue
+                        ? "bg-red-100 text-red-700"
+                        : "bg-amber-100 text-amber-700"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider block">
+                      Pay Later Outstanding Balance
+                    </span>
+                    <span className="text-lg font-bold font-mono">
+                      {formatCurrency(data.payLater.totalPayLaterDebt.toFixed(2), currency)}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  {data.payLater.totalPayLaterDebt > 0 ? (
+                    <div className="space-y-0.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                        data.payLater.isPayLaterOverdue
+                          ? "bg-red-100 text-red-700 border border-red-300"
+                          : "bg-amber-100 text-amber-800 border border-amber-300"
+                      }`}>
+                        {data.payLater.isPayLaterOverdue ? "OVERDUE" : "Payment Due"}
+                      </span>
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        Due: {data.payLater.payLaterDueDate ? new Date(data.payLater.payLaterDueDate).toLocaleDateString() : "—"}
+                        {data.payLater.daysRemainingUntilDue !== null && !data.payLater.isPayLaterOverdue && (
+                          <span> ({data.payLater.daysRemainingUntilDue}d left)</span>
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Zero Debt ✓
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <button
                 onClick={() => onTopUp(customerId)}
-                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                className="flex-1 min-w-[130px] py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
               >
                 <DollarSign className="w-4 h-4" />
                 <span>Top-up Credits</span>
               </button>
 
               <button
+                onClick={() => {
+                  setShowResetModal(true);
+                  setNewPassword("");
+                  setResetSuccessMsg(null);
+                  setResetError(null);
+                }}
+                className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+              >
+                <KeyRound className="w-4 h-4 text-indigo-600" />
+                <span>Reset Password</span>
+              </button>
+
+              <button
                 onClick={() => onToggleStatus(customerId, cust?.suspendedReason ?? undefined)}
-                className={`px-4 py-2 border rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3.5 py-2 border rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                   !cust?.isSuspended
                     ? "bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 border-slate-200 hover:border-red-200"
                     : "bg-red-50 hover:bg-red-100 text-red-700 border-red-200"
@@ -463,6 +536,99 @@ export default function CustomerDetailDrawer({
           </div>
         )}
       </motion.div>
+
+      {/* Password Reset Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-bold text-slate-900 text-sm">Reset Customer Password</h3>
+              </div>
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Set a new temporary password for <strong>{cust?.name || "Customer"}</strong>.
+            </p>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                New Password
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const randomPass = "GZ" + Math.floor(100000 + Math.random() * 900000);
+                    setNewPassword(randomPass);
+                  }}
+                  className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+
+            {resetError && (
+              <p className="text-xs text-red-600 font-semibold bg-red-50 p-2.5 rounded-lg border border-red-200">
+                {resetError}
+              </p>
+            )}
+
+            {resetSuccessMsg && (
+              <div className="text-xs text-emerald-800 font-semibold bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 space-y-1">
+                <p>✓ {resetSuccessMsg}</p>
+                <p className="font-mono text-emerald-950">Password: <strong>{newPassword}</strong></p>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resetLoading || newPassword.length < 6}
+                onClick={async () => {
+                  if (!storeId || !customerId) return;
+                  setResetLoading(true);
+                  setResetError(null);
+                  setResetSuccessMsg(null);
+                  try {
+                    await resetCustomerPassword(storeId, customerId, newPassword);
+                    setResetSuccessMsg("Password reset successfully! Hand over to customer.");
+                  } catch (err: any) {
+                    setResetError(err?.message || "Failed to reset password");
+                  } finally {
+                    setResetLoading(false);
+                  }
+                }}
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
+              >
+                {resetLoading ? "Saving..." : "Save Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -44,6 +44,7 @@ import {
   updateLoyaltyReward,
   deleteLoyaltyReward,
 } from "../api/loyalty";
+import { getPayLaterData, updatePaymentSettings } from "../api/customers";
 import {
   ApiBookingConfig,
   ApiPaymentQr,
@@ -103,6 +104,48 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
       window.alert(`Failed to save payment QR: ${err instanceof ApiError ? err.message : "unknown error"}`);
     } finally {
       setSavingQr(false);
+    }
+  };
+
+  // ── Pay Later Policy & Limits ─────────────────────────────
+  const [payLaterMaxDaily, setPayLaterMaxDaily] = useState<number>(1);
+  const [payLaterMaxPerReq, setPayLaterMaxPerReq] = useState<number>(1000);
+  const [payLaterMaxDebt, setPayLaterMaxDebt] = useState<number>(5000);
+  const [payLaterRepaymentDays, setPayLaterRepaymentDays] = useState<number>(7);
+  const [savingPayLaterSettings, setSavingPayLaterSettings] = useState<boolean>(false);
+  const [payLaterSettingsSaved, setPayLaterSettingsSaved] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!storeId) return;
+    getPayLaterData(storeId)
+      .then((res) => {
+        if (res.settings) {
+          setPayLaterMaxDaily(res.settings.maxRequestsPerDay ?? 1);
+          setPayLaterMaxPerReq(res.settings.maxAmountPerRequest ?? 1000);
+          setPayLaterMaxDebt(res.settings.maxOutstandingBalance ?? 5000);
+          setPayLaterRepaymentDays(res.settings.repaymentWindowDays ?? 7);
+        }
+      })
+      .catch(() => {});
+  }, [storeId]);
+
+  const handleSavePayLaterSettings = async () => {
+    if (!storeId) return;
+    setSavingPayLaterSettings(true);
+    setPayLaterSettingsSaved(false);
+    try {
+      await updatePaymentSettings(storeId, {
+        pay_later_max_requests_per_day: Number(payLaterMaxDaily),
+        pay_later_max_amount_per_request: Number(payLaterMaxPerReq),
+        pay_later_max_outstanding_balance: Number(payLaterMaxDebt),
+        pay_later_repayment_window_days: Number(payLaterRepaymentDays),
+      });
+      setPayLaterSettingsSaved(true);
+      setTimeout(() => setPayLaterSettingsSaved(false), 3000);
+    } catch (err: any) {
+      window.alert(`Failed to save Pay Later policy: ${err?.message || "unknown error"}`);
+    } finally {
+      setSavingPayLaterSettings(false);
     }
   };
 
@@ -624,8 +667,9 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
       {/* Payment QR & Booking Configuration: Responsive 2-column grid */}
       {(showPayments || showBooking) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {/* UPI Payment QR */}
+          {/* UPI Payment QR & Pay Later Policy */}
           {showPayments && (
+            <>
             <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4 min-w-0">
               <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
                 <QrCode className="w-4.5 h-4.5 text-indigo-600" />
@@ -676,6 +720,102 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
                 </button>
               )}
             </div>
+
+            {/* Pay Later Policy & Limits Card */}
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-precision space-y-4 min-w-0">
+              <div className="flex items-center space-x-2 text-slate-800 font-bold text-sm border-b border-slate-100 pb-3 font-display">
+                <Clock className="w-4.5 h-4.5 text-indigo-600" />
+                <span>Pay Later Policy &amp; Restrictions</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Configure limits for the Pay Later feature. Gamers who breach cumulative limits or overdue windows will be locked out and required to settle at the counter.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    Max Requests Per Day (Per Gamer)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={payLaterMaxDaily}
+                    onChange={(e) => setPayLaterMaxDaily(parseInt(e.target.value) || 1)}
+                    disabled={!isSuperAdmin}
+                    className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400">e.g. 1 request per day</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    Max Amount Per Request (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    step={50}
+                    value={payLaterMaxPerReq}
+                    onChange={(e) => setPayLaterMaxPerReq(parseFloat(e.target.value) || 1000)}
+                    disabled={!isSuperAdmin}
+                    className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400">Single request cap</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    Max Cumulative Unpaid Balance (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={50}
+                    step={100}
+                    value={payLaterMaxDebt}
+                    onChange={(e) => setPayLaterMaxDebt(parseFloat(e.target.value) || 5000)}
+                    disabled={!isSuperAdmin}
+                    className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400">Hard debt limit before lockout</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    Repayment Window (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={payLaterRepaymentDays}
+                    onChange={(e) => setPayLaterRepaymentDays(parseInt(e.target.value) || 7)}
+                    disabled={!isSuperAdmin}
+                    className="w-full px-3 py-1.5 border border-slate-200 text-xs rounded-lg bg-slate-50 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400">Days until debt marked overdue</p>
+                </div>
+              </div>
+
+              {isSuperAdmin && (
+                <div className="flex items-center justify-between pt-2">
+                  {payLaterSettingsSaved ? (
+                    <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Settings saved!
+                    </span>
+                  ) : <span />}
+                  <button
+                    type="button"
+                    onClick={handleSavePayLaterSettings}
+                    disabled={savingPayLaterSettings}
+                    className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                  >
+                    {savingPayLaterSettings ? "Saving…" : "Save Pay Later Policy"}
+                  </button>
+                </div>
+              )}
+            </div>
+            </>
           )}
 
           {/* Booking Configuration */}
