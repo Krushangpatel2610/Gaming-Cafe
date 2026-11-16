@@ -192,12 +192,20 @@ export interface ApiPayLaterData {
     createdAt: string;
     confirmedAt: string | null;
   }>;
-  settings: {
+  settings?: {
     maxRequestsPerDay: number;
     maxAmountPerRequest: number;
     maxOutstandingBalance: number;
     repaymentWindowDays: number;
   };
+  limits?: {
+    maxRequestsPerDay: number;
+    maxAmountPerRequest: number;
+    maxOutstandingBalance: number;
+    repaymentWindowDays: number;
+  };
+  pending?: any[];
+  debtors?: any[];
 }
 
 export function getPayLaterData(storeId: string): Promise<ApiPayLaterData> {

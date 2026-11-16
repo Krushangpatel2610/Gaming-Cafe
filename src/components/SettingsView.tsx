@@ -118,12 +118,13 @@ export default function SettingsView({ settings, systemTypes, onSaveSettings }: 
   useEffect(() => {
     if (!storeId) return;
     getPayLaterData(storeId)
-      .then((res) => {
-        if (res.settings) {
-          setPayLaterMaxDaily(res.settings.maxRequestsPerDay ?? 1);
-          setPayLaterMaxPerReq(res.settings.maxAmountPerRequest ?? 1000);
-          setPayLaterMaxDebt(res.settings.maxOutstandingBalance ?? 5000);
-          setPayLaterRepaymentDays(res.settings.repaymentWindowDays ?? 7);
+      .then((res: any) => {
+        const s = res?.settings || res?.limits;
+        if (s) {
+          setPayLaterMaxDaily(s.maxRequestsPerDay ?? 1);
+          setPayLaterMaxPerReq(s.maxAmountPerRequest ?? 1000);
+          setPayLaterMaxDebt(s.maxOutstandingBalance ?? 5000);
+          setPayLaterRepaymentDays(s.repaymentWindowDays ?? 7);
         }
       })
       .catch(() => {});

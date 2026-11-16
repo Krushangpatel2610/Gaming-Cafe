@@ -253,8 +253,31 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
     if (!storeId) return;
     setLoadingPayLater(true);
     try {
-      const res = await getPayLaterData(storeId);
-      setPayLaterData(res);
+      const res = (await getPayLaterData(storeId)) as any;
+      const normalized: ApiPayLaterData = {
+        pendingAllowed: res.pendingAllowed || res.pending || [],
+        customerSummary:
+          res.customerSummary ||
+          (res.debtors || []).map((d: any) => ({
+            userId: d.userId,
+            name: d.userName || d.name,
+            email: d.userEmail || d.email,
+            phone: d.userPhone || d.phone,
+            totalDebt: typeof d.totalDebt === "number" ? d.totalDebt : parseFloat(d.totalDebt) || 0,
+            unpaidCount: d.itemsCount || d.unpaidCount || 0,
+            oldestUnpaidDate: d.oldestUnpaidAt || d.oldestUnpaidDate,
+            dueDate: d.dueDate,
+            isOverdue: d.isOverdue,
+            daysRemaining: d.daysRemaining,
+          })),
+        history: (res.history || []).map((h: any) => ({
+          ...h,
+          customerName: h.customerName || h.userName,
+          confirmedAt: h.confirmedAt || h.reviewedAt,
+        })),
+        settings: res.settings || res.limits,
+      };
+      setPayLaterData(normalized);
     } catch (err) {
       console.error("Failed to load Pay Later data:", err);
     } finally {
@@ -585,7 +608,7 @@ export default function PaymentsView({ currency, customers, onNotify }: Payments
                           if (item.type === "topup") {
                             await handleConfirmTopup({ id: item.id, amount: item.amount } as any);
                           } else {
-                            await handleConfirmGamepass({ id: item.id, totalAmount: item.amount, paymentMethod: 'pay_later' } as any);
+                            await handleConfirmOrder({ id: item.id, totalAmount: item.amount, paymentMethod: 'pay_later' } as any);
                           }
                           await refreshPayLaterData();
                         }}

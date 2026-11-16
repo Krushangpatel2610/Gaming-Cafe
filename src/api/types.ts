@@ -59,7 +59,6 @@ export interface ApiSystemSessionInfo {
   targetCapMinutes?: number | null;
   initialCapMinutes?: number | null;
   extensionMinutes?: number | null;
-  initialCapMinutes?: number | null;
   capChoiceMade?: boolean;
   remainingMinutes?: number | null;
   inBreak?: boolean;
