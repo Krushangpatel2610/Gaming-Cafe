@@ -101,6 +101,7 @@ export default function LivePCsView({ currency, pcs,
   const [newMonitor, setNewMonitor] = useState<string>("");
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
   const [revealedSystemId, setRevealedSystemId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Edit Terminal modal state — rename + reassign pricing tier (systemTypeId).
   // "__custom__" is a sentinel select value (never a real systemTypeId) that
@@ -534,18 +535,61 @@ export default function LivePCsView({ currency, pcs,
               }`}
             >
               {/* PC Header */}
-              <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
-                <div className="min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-mono font-bold text-slate-400">{pc.id.slice(0, 8).toUpperCase()}</span>
+              <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center space-x-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pc.id);
+                        setCopiedId(pc.id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                      className="text-[11px] font-mono font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1 bg-slate-200/70 hover:bg-indigo-50 px-1.5 py-0.5 rounded transition-colors"
+                      title={`Click to copy full System ID: ${pc.id}`}
+                    >
+                      <span>{copiedId === pc.id ? "COPIED ID!" : pc.id.slice(0, 8).toUpperCase()}</span>
+                      {copiedId === pc.id ? (
+                        <Check className="w-2.5 h-2.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-2.5 h-2.5 opacity-60" />
+                      )}
+                    </button>
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                    <span className="text-xs font-semibold text-slate-500 font-mono">{pc.group}</span>
+                    <span className="text-xs font-semibold text-slate-500 font-mono truncate">{pc.group}</span>
                   </div>
                   <h3 className="text-sm font-bold text-slate-800 mt-1 truncate">{pc.name}</h3>
                 </div>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(pc.status)}`}>
-                  {pc.status}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {canManageHardware && (
+                    <div className="flex items-center gap-0.5 bg-white border border-slate-200/80 rounded-lg p-0.5 shadow-sm">
+                      <button
+                        onClick={() => handleEditClick(pc)}
+                        className="p-1 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 rounded transition-colors"
+                        title="Edit terminal settings & pricing"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleRegenerateClick(pc.id, pc.name)}
+                        className="p-1 hover:bg-amber-50 text-slate-400 hover:text-amber-600 rounded transition-colors"
+                        title="Regenerate this terminal's API key"
+                      >
+                        <KeyRound className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(pc.id, pc.name)}
+                        className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded transition-colors"
+                        title="Deactivate this terminal"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusBadge(pc.status)}`}>
+                    {pc.status}
+                  </span>
+                </div>
               </div>
 
               {/* PC Content details */}
@@ -753,7 +797,7 @@ export default function LivePCsView({ currency, pcs,
                 </div>
 
                 {/* Remote controls: Force Logout (software only) & unlock */}
-                <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/70">
+                <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-200/70">
                   <span className="text-[10px] text-slate-400 font-mono uppercase mr-auto">Remote:</span>
                   <button
                     onClick={() => {
@@ -1052,6 +1096,39 @@ export default function LivePCsView({ currency, pcs,
             </div>
 
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              {/* System ID & Key banner */}
+              {editPC && (
+                <div className="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System ID</label>
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateClick(editPC.id, editPC.name)}
+                      className="text-[10px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 font-mono hover:underline"
+                      title="Generate a new API key for this terminal"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>Regenerate API Key</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 text-slate-800 font-mono text-xs rounded-lg p-2 break-all">
+                    <span className="flex-1 select-all">{editPC.id}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(editPC.id);
+                        setCopiedId(editPC.id);
+                        setTimeout(() => setCopiedId(null), 2000);
+                      }}
+                      className="text-slate-400 hover:text-indigo-600 shrink-0 p-1 rounded hover:bg-slate-100 transition-colors"
+                      title="Copy System ID"
+                    >
+                      {copiedId === editPC.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Terminal Name</label>
                 <input
