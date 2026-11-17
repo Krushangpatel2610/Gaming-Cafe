@@ -539,6 +539,7 @@ function Dashboard() {
     try {
       const result = await regenerateSystemKey(storeId, pcId);
       addLog("PC", `API key regenerated for ${pc?.name || pcId}.`, "success");
+      setPCs(prev => prev.map(p => p.id === pcId ? { ...p, apiKey: result.apiKey } : p));
       return result.apiKey;
     } catch (err) {
       addLog("System", `Failed to regenerate key: ${err instanceof ApiError ? err.message : "unknown error"}`, "danger");

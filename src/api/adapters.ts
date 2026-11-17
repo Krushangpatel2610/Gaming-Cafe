@@ -127,6 +127,7 @@ export function adaptSystemToPC(system: ApiSystem, activeSession?: ApiSession | 
     currentUser: resolvedUserName,
     currentUserPhone: resolvedUserPhone,
     timeRemaining,
+    apiKey: system.apiKey ?? null,
     systemTypeId: system.systemTypeId,
     stationNumber: system.stationNumber != null && system.stationNumber !== "" ? Number(system.stationNumber) : null,
     platform: system.platform ?? null,

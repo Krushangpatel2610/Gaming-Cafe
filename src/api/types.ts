@@ -77,6 +77,7 @@ export interface ApiSystem {
   macAddress?: string;
   specs?: ApiSystemSpecs;
   isAgentOnline?: boolean;
+  apiKey?: string | null;
   currentSessionId?: string;
   currentSession?: ApiSystemSessionInfo | null;
   createdAt?: string;

@@ -28,7 +28,9 @@ import {
   Gamepad2,
   Check,
   Loader2,
-  AppWindow
+  AppWindow,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { PC, PCStatus, PCGroup } from "../types";
 import { ApiCustomer, ApiSystemType, ApiSystemPlatform } from "../api/types";
@@ -113,6 +115,9 @@ export default function LivePCsView({ currency, pcs,
   const [editSystemTypeId, setEditSystemTypeId] = useState<string>("");
   const [editCustomRate, setEditCustomRate] = useState<string>("");
   const [editSubmitting, setEditSubmitting] = useState<boolean>(false);
+  const [editPCNewApiKey, setEditPCNewApiKey] = useState<string | null>(null);
+  const [showApiKey, setShowApiKey] = useState<boolean>(true);
+  const [copiedApiKey, setCopiedApiKey] = useState<boolean>(false);
   const CUSTOM_RATE_VALUE = "__custom__";
 
   // Modal State for starting a session
@@ -356,8 +361,13 @@ export default function LivePCsView({ currency, pcs,
     if (!window.confirm(`Regenerate the API key for ${pcName}? The old key will stop working immediately — update the agent config right after.`)) return;
     const apiKey = await onRegenerateKey(pcId);
     if (apiKey) {
-      setRevealedApiKey(apiKey);
-      setRevealedSystemId(pcId);
+      if (editPCId === pcId) {
+        setEditPCNewApiKey(apiKey);
+        setShowApiKey(true);
+      } else {
+        setRevealedApiKey(apiKey);
+        setRevealedSystemId(pcId);
+      }
     }
   };
 
@@ -373,6 +383,9 @@ export default function LivePCsView({ currency, pcs,
     setEditPlatform((pc.platform as ApiSystemPlatform) || "pc");
     setEditSystemTypeId(pc.systemTypeId || "");
     setEditCustomRate("");
+    setEditPCNewApiKey(null);
+    setShowApiKey(true);
+    setCopiedApiKey(false);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -407,6 +420,7 @@ export default function LivePCsView({ currency, pcs,
   };
 
   const editPC = pcs.find(p => p.id === editPCId);
+  const activeEditApiKey = editPCNewApiKey || editPC?.apiKey || null;
 
   return (
     <motion.div
@@ -1096,35 +1110,84 @@ export default function LivePCsView({ currency, pcs,
             </div>
 
             <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
-              {/* System ID & Key banner */}
+              {/* System ID & Agent API Key */}
               {editPC && (
-                <div className="space-y-1 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System ID</label>
-                    <button
-                      type="button"
-                      onClick={() => handleRegenerateClick(editPC.id, editPC.name)}
-                      className="text-[10px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 font-mono hover:underline"
-                      title="Generate a new API key for this terminal"
-                    >
-                      <KeyRound className="w-3 h-3" />
-                      <span>Regenerate API Key</span>
-                    </button>
+                <div className="space-y-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  {/* System ID */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">System ID</label>
+                      <button
+                        type="button"
+                        onClick={() => handleRegenerateClick(editPC.id, editPC.name)}
+                        className="text-[10px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 font-mono hover:underline"
+                        title="Generate a new API key for this terminal"
+                      >
+                        <KeyRound className="w-3 h-3" />
+                        <span>Regenerate API Key</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 text-slate-800 font-mono text-xs rounded-lg p-2 break-all">
+                      <span className="flex-1 select-all">{editPC.id}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(editPC.id);
+                          setCopiedId(editPC.id);
+                          setTimeout(() => setCopiedId(null), 2000);
+                        }}
+                        className="text-slate-400 hover:text-indigo-600 shrink-0 p-1 rounded hover:bg-slate-100 transition-colors"
+                        title="Copy System ID"
+                      >
+                        {copiedId === editPC.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-white border border-slate-200 text-slate-800 font-mono text-xs rounded-lg p-2 break-all">
-                    <span className="flex-1 select-all">{editPC.id}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(editPC.id);
-                        setCopiedId(editPC.id);
-                        setTimeout(() => setCopiedId(null), 2000);
-                      }}
-                      className="text-slate-400 hover:text-indigo-600 shrink-0 p-1 rounded hover:bg-slate-100 transition-colors"
-                      title="Copy System ID"
-                    >
-                      {copiedId === editPC.id ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+
+                  {/* Agent API Key */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Agent API Key</label>
+                      {activeEditApiKey && (
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 font-mono hover:underline"
+                          title={showApiKey ? "Hide API Key" : "Show API Key"}
+                        >
+                          {showApiKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          <span>{showApiKey ? "Hide" : "Show"}</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 text-slate-800 font-mono text-xs rounded-lg p-2 break-all">
+                      {activeEditApiKey ? (
+                        <>
+                          <span className="flex-1 select-all">
+                            {showApiKey ? activeEditApiKey : "••••••••••••••••••••••••••••••••"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(activeEditApiKey);
+                              setCopiedApiKey(true);
+                              setTimeout(() => setCopiedApiKey(false), 2000);
+                            }}
+                            className="text-slate-400 hover:text-indigo-600 shrink-0 p-1 rounded hover:bg-slate-100 transition-colors"
+                            title="Copy Agent API Key"
+                          >
+                            {copiedApiKey ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex-1 text-[11px] text-slate-400 italic">
+                          Key not stored. Click &ldquo;Regenerate API Key&rdquo; to generate &amp; reveal key.
+                        </div>
+                      )}
+                    </div>
+                    {editPCNewApiKey && (
+                      <p className="text-[10px] text-emerald-600 font-medium">New API key generated and ready to copy!</p>
+                    )}
                   </div>
                 </div>
               )}

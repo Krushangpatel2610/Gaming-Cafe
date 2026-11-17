@@ -32,6 +32,7 @@ export interface PC {
   timeRemaining?: number; // in seconds
   totalPlayTimeToday?: number; // in minutes
   systemTypeId?: string;
+  apiKey?: string | null;
   stationNumber?: number | null;
   platform?: string | null;
   targetCapMinutes?: number | null;
