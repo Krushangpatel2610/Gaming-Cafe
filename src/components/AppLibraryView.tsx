@@ -54,12 +54,14 @@ export default function AppLibraryView({
   const [newName, setNewName] = useState<string>("");
   const [newCategory, setNewCategory] = useState<string>("Utilities");
   const [newLaunchArgs, setNewLaunchArgs] = useState<string>("");
+  const [newPaths, setNewPaths] = useState<string[]>([""]);
 
   // Edit modal state
   const [editApp, setEditApp] = useState<ApiApp | null>(null);
   const [editName, setEditName] = useState<string>("");
   const [editCategory, setEditCategory] = useState<string>("Utilities");
   const [editLaunchArgs, setEditLaunchArgs] = useState<string>("");
+  const [editPaths, setEditPaths] = useState<string[]>([""]);
 
   // Station assignment modal state
   const [assignApp, setAssignApp] = useState<ApiApp | null>(null);
@@ -80,11 +82,13 @@ export default function AppLibraryView({
 
   const handleAddAppSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddApp(newName, newCategory, "", newLaunchArgs || undefined);
+    const cleanPaths = newPaths.map(p => p.trim()).filter(Boolean).join(";\n");
+    onAddApp(newName, newCategory, cleanPaths, newLaunchArgs || undefined);
     setShowAddModal(false);
     setNewName("");
     setNewCategory("Utilities");
     setNewLaunchArgs("");
+    setNewPaths([""]);
   };
 
   const openEditModal = (app: ApiApp) => {
@@ -92,6 +96,9 @@ export default function AppLibraryView({
     setEditName(app.name);
     setEditCategory(app.category || "Utilities");
     setEditLaunchArgs(app.launchArgs || "");
+    const raw = app.executablePath || "";
+    const parsed = raw.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    setEditPaths(parsed.length > 0 ? parsed : [""]);
   };
 
   const closeEditModal = () => {
@@ -99,14 +106,73 @@ export default function AppLibraryView({
     setEditName("");
     setEditCategory("Utilities");
     setEditLaunchArgs("");
+    setEditPaths([""]);
+  };
+
+  const handleAddEditPath = () => {
+    setEditPaths(prev => [...prev, ""]);
+  };
+
+  const handleRemoveEditPath = (index: number) => {
+    setEditPaths(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
+  };
+
+  const handleEditPathChange = (index: number, val: string) => {
+    const pasted = val.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    if (pasted.length > 1) {
+      setEditPaths(prev => {
+        const next = [...prev];
+        next.splice(index, 1, ...pasted);
+        return next;
+      });
+    } else {
+      setEditPaths(prev => {
+        const next = [...prev];
+        next[index] = val;
+        return next;
+      });
+    }
+  };
+
+  const handleAddNewPath = () => {
+    setNewPaths(prev => [...prev, ""]);
+  };
+
+  const handleRemoveNewPath = (index: number) => {
+    setNewPaths(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
+  };
+
+  const handleNewPathChange = (index: number, val: string) => {
+    const pasted = val.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    if (pasted.length > 1) {
+      setNewPaths(prev => {
+        const next = [...prev];
+        next.splice(index, 1, ...pasted);
+        return next;
+      });
+    } else {
+      setNewPaths(prev => {
+        const next = [...prev];
+        next[index] = val;
+        return next;
+      });
+    }
   };
 
   const handleEditAppSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editApp) return;
+    const cleanPaths = editPaths.map(p => p.trim()).filter(Boolean).join(";\n");
     onUpdateApp(editApp.id, {
       name: editName,
       category: editCategory,
+      executablePath: cleanPaths || undefined,
       launchArgs: editLaunchArgs || undefined,
     });
     closeEditModal();
@@ -266,6 +332,13 @@ export default function AppLibraryView({
                   {app.isActive ? "Active in registry" : "Taken offline"}
                 </span>
 
+                {app.executablePath && (
+                  <div className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded px-2 py-1 flex items-center gap-1.5 truncate" title={app.executablePath}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0"></span>
+                    <span className="truncate">{app.executablePath.split(/[\r\n;]+/).filter(Boolean).length} global path(s) configured</span>
+                  </div>
+                )}
+
                 <button
                   onClick={() => openAssignModal(app)}
                   className="w-full py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center space-x-1.5 text-xs border bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700"
@@ -346,6 +419,45 @@ export default function AppLibraryView({
                   </select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Global Executable Paths</label>
+                  <button
+                    type="button"
+                    onClick={handleAddNewPath}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Path</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Provide candidate install paths across your PCs (e.g. across C:\, D:\, E:\ drives). GameCentral checks these in order on each station and automatically launches the path found.
+                </p>
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {newPaths.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p}
+                        onChange={(e) => handleNewPathChange(idx, e.target.value)}
+                        placeholder="e.g. C:\Program Files\Google\Chrome\Application\chrome.exe"
+                        className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
+                      />
+                      {newPaths.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveNewPath(idx)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove path"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Launch Arguments (optional)</label>
                 <input
@@ -410,6 +522,45 @@ export default function AppLibraryView({
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Global Executable Paths</label>
+                  <button
+                    type="button"
+                    onClick={handleAddEditPath}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Path</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Provide candidate install paths across your PCs (e.g. across C:\, D:\, E:\ drives). GameCentral checks these in order on each station and automatically launches the path found.
+                </p>
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {editPaths.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p}
+                        onChange={(e) => handleEditPathChange(idx, e.target.value)}
+                        placeholder="e.g. C:\Program Files\Google\Chrome\Application\chrome.exe"
+                        className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
+                      />
+                      {editPaths.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditPath(idx)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove path"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Launch Arguments (optional)</label>

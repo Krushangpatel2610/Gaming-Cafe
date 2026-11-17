@@ -29,11 +29,11 @@ interface GameLibraryViewProps {
   games: ApiGame[];
   systems: SystemOption[];
   storeId: string;
-  onAddGame: (name: string, genre?: string, imageFile?: File | null) => void;
+  onAddGame: (name: string, genre?: string, imageFile?: File | null, executablePath?: string) => void;
   onUpdateGameStatus: (gameId: string, isActive: boolean) => void;
   onInstallGame: (gameId: string, systemId: string, executablePath?: string | null) => Promise<void>;
   onUninstallGame: (gameId: string, systemId: string) => Promise<void>;
-  onUpdateGame: (gameId: string, data: { name: string, genre?: string }, imageFile?: File | null) => void;
+  onUpdateGame: (gameId: string, data: { name: string, genre?: string, executablePath?: string }, imageFile?: File | null) => void;
   onDeleteGame: (gameId: string, name: string) => void;
 }
 
@@ -57,10 +57,14 @@ export default function GameLibraryView({ currency, games,
   const newImagePreview = useMemo(() => (newImageFile ? URL.createObjectURL(newImageFile) : null), [newImageFile]);
   const editImagePreview = useMemo(() => (editImageFile ? URL.createObjectURL(editImageFile) : null), [editImageFile]);
 
+  // Add modal paths
+  const [newPaths, setNewPaths] = useState<string[]>([""]);
+
   // Edit modal state
   const [editGame, setEditGame] = useState<ApiGame | null>(null);
   const [editName, setEditName] = useState<string>("");
   const [editGenre, setEditGenre] = useState<string>("");
+  const [editPaths, setEditPaths] = useState<string[]>([""]);
 
   // Station assignment modal state
   const [assignGame, setAssignGame] = useState<ApiGame | null>(null);
@@ -81,11 +85,13 @@ export default function GameLibraryView({ currency, games,
 
   const handleAddGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onAddGame(newName, newGenre || undefined, newImageFile);
+    const cleanPaths = newPaths.map(p => p.trim()).filter(Boolean).join(";\n");
+    onAddGame(newName, newGenre || undefined, newImageFile, cleanPaths || undefined);
     setShowAddModal(false);
     setNewName("");
     setNewGenre("");
     setNewImageFile(null);
+    setNewPaths([""]);
   };
 
   const openEditModal = (game: ApiGame) => {
@@ -93,6 +99,9 @@ export default function GameLibraryView({ currency, games,
     setEditName(game.name);
     setEditGenre(game.genre || "");
     setEditImageFile(null);
+    const raw = game.executablePath || "";
+    const parsed = raw.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    setEditPaths(parsed.length > 0 ? parsed : [""]);
   };
 
   const closeEditModal = () => {
@@ -100,14 +109,73 @@ export default function GameLibraryView({ currency, games,
     setEditName("");
     setEditGenre("");
     setEditImageFile(null);
+    setEditPaths([""]);
+  };
+
+  const handleAddEditPath = () => {
+    setEditPaths(prev => [...prev, ""]);
+  };
+
+  const handleRemoveEditPath = (index: number) => {
+    setEditPaths(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
+  };
+
+  const handleEditPathChange = (index: number, val: string) => {
+    const pasted = val.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    if (pasted.length > 1) {
+      setEditPaths(prev => {
+        const next = [...prev];
+        next.splice(index, 1, ...pasted);
+        return next;
+      });
+    } else {
+      setEditPaths(prev => {
+        const next = [...prev];
+        next[index] = val;
+        return next;
+      });
+    }
+  };
+
+  const handleAddNewPath = () => {
+    setNewPaths(prev => [...prev, ""]);
+  };
+
+  const handleRemoveNewPath = (index: number) => {
+    setNewPaths(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [""];
+    });
+  };
+
+  const handleNewPathChange = (index: number, val: string) => {
+    const pasted = val.split(/[\r\n;]+/).map(s => s.trim()).filter(Boolean);
+    if (pasted.length > 1) {
+      setNewPaths(prev => {
+        const next = [...prev];
+        next.splice(index, 1, ...pasted);
+        return next;
+      });
+    } else {
+      setNewPaths(prev => {
+        const next = [...prev];
+        next[index] = val;
+        return next;
+      });
+    }
   };
 
   const handleEditGameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editGame) return;
+    const cleanPaths = editPaths.map(p => p.trim()).filter(Boolean).join(";\n");
     onUpdateGame(editGame.id, {
       name: editName,
       genre: editGenre || undefined,
+      executablePath: cleanPaths || undefined,
     }, editImageFile);
     closeEditModal();
   };
@@ -271,6 +339,13 @@ export default function GameLibraryView({ currency, games,
                   {game.isActive ? "Active in registry" : "Taken offline"}
                 </span>
 
+                {game.executablePath && (
+                  <div className="text-[10px] font-mono text-slate-500 bg-slate-50 border border-slate-100 rounded px-2 py-1 flex items-center gap-1.5 truncate" title={game.executablePath}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
+                    <span className="truncate">{game.executablePath.split(/[\r\n;]+/).filter(Boolean).length} global path(s) configured</span>
+                  </div>
+                )}
+
                 <button
                   onClick={() => openAssignModal(game)}
                   className="w-full py-1.5 rounded-lg font-semibold transition-all flex items-center justify-center space-x-1.5 text-xs border bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700"
@@ -347,6 +422,45 @@ export default function GameLibraryView({ currency, games,
                   placeholder="e.g. Action RPG"
                 />
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Global Executable Paths</label>
+                  <button
+                    type="button"
+                    onClick={handleAddNewPath}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Path</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Provide candidate install paths across your PCs (e.g. across C:\, D:\, E:\ drives, or steam:// URLs). GameCentral checks these in order on each station and automatically launches the path found.
+                </p>
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {newPaths.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p}
+                        onChange={(e) => handleNewPathChange(idx, e.target.value)}
+                        placeholder="e.g. D:\SteamLibrary\steamapps\common\CS2\cs2.exe or steam://rungameid/730"
+                        className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
+                      />
+                      {newPaths.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveNewPath(idx)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove path"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Cover Image (optional)</label>
                 <div className="flex items-center gap-3">
@@ -411,6 +525,45 @@ export default function GameLibraryView({ currency, games,
                   onChange={(e) => setEditGenre(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50"
                 />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Global Executable Paths</label>
+                  <button
+                    type="button"
+                    onClick={handleAddEditPath}
+                    className="text-[11px] text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Path</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Provide candidate install paths across your PCs (e.g. across C:\, D:\, E:\ drives, or steam:// URLs). GameCentral checks these in order on each station and automatically launches the path found.
+                </p>
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {editPaths.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p}
+                        onChange={(e) => handleEditPathChange(idx, e.target.value)}
+                        placeholder="e.g. D:\SteamLibrary\steamapps\common\CS2\cs2.exe or steam://rungameid/730"
+                        className="flex-1 px-3 py-2 border border-slate-200 text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 font-mono"
+                      />
+                      {editPaths.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditPath(idx)}
+                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove path"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Cover Image</label>
